@@ -2,6 +2,6 @@
   "name": "quantscrow-core",
   "version": "1.0.0",
   "scripts": {
-    "start": "echo 'QuantScrow Core App Running'"
+    "start": "node server.js"
   }
 }
