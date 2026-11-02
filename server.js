@@ -4,18 +4,13 @@ const path = require('path');
 
 const server = http.createServer((req, res) => {
     const filePath = path.join(__dirname, 'index.html');
-    fs.readFile(filePath, (err, content) => {
+    fs.readFile(filePath, (err, data) => {
         if (err) {
-            res.writeHead(200, { 'Content-Type': 'text/plain; charset=utf-8' });
-            res.end('QuantScrow Core Service Active');
+            res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+            res.end('404 Not Found');
         } else {
             res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-            res.end(content);
+            res.end(data);
         }
     });
-});
-
-const PORT = process.env.PORT || 3000;
-server.listen(PORT, () => {
-    console.log(`Server running on port ${PORT}`);
 });
