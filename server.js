@@ -1,4 +1,4 @@
-const http = require('http');
+onst http = require('http');
 
 const server = http.createServer((req, res) => {
     if (req.url === '/' || req.url === '/index.html') {
@@ -8,8 +8,8 @@ const server = http.createServer((req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantscrow Core | Generative Quant Engine</title>
-    <!-- TradingView Lightweight Charts -->
+    <title>Quantscrow Core | Live Engine</title>
+    <!-- TradingView Lightweight Charts CDN -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         :root {
@@ -51,10 +51,12 @@ const server = http.createServer((req, res) => {
         
         #chart-container {
             width: 100%;
-            height: 380px;
+            height: 350px;
+            background: #0b1120;
             border-radius: 0.5rem;
             overflow: hidden;
             margin-bottom: 1rem;
+            border: 1px solid var(--border-color);
         }
 
         .controls {
@@ -88,6 +90,7 @@ const server = http.createServer((req, res) => {
             border: 1px solid var(--border-color);
             color: #34d399;
             margin-top: 1rem;
+            line-height: 1.5;
         }
         .live-indicator {
             display: flex;
@@ -114,7 +117,7 @@ const server = http.createServer((req, res) => {
     <div class="container">
         <div class="card">
             <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal Cuantitativo & Generador Dinámico de Órdenes +EV</p>
+            <p class="subtitle">Terminal Cuantitativo & Gráficas en Tiempo Real</p>
             
             <div id="chart-container"></div>
 
@@ -131,75 +134,83 @@ const server = http.createServer((req, res) => {
     </div>
 
     <script>
-        const chartContainer = document.getElementById('chart-container');
-        const chart = LightweightCharts.createChart(chartContainer, {
-            layout: { background: { type: 'solid', color: '#0f172a' }, textColor: '#94a3b8' },
-            grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
-            timeScale: { borderColor: '#334155', timeVisible: true, secondsVisible: true },
-            rightPriceScale: { borderColor: '#334155' },
-        });
-
-        const candlestickSeries = chart.addCandlestickSeries({
-            upColor: '#34d399', downColor: '#ef4444', borderVisible: false,
-            wickUpColor: '#34d399', wickDownColor: '#ef4444',
-        });
-
-        const now = Math.floor(Date.now() / 1000);
-        let basePrice = 2750.00;
+        let currentMarketPrice = 2750.00;
+        let candlestickSeries;
         let historicalData = [];
-        for (let i = 30; i > 0; i--) {
-            const time = now - (i * 3);
-            const open = basePrice;
-            const close = open + (Math.random() - 0.48) * 2.5;
-            const high = Math.max(open, close) + Math.random() * 1.2;
-            const low = Math.min(open, close) - Math.random() * 1.2;
-            historicalData.push({ time, open, high, low, close });
-            basePrice = close;
-        }
-        candlestickSeries.setData(historicalData);
 
-        let currentMarketPrice = basePrice;
+        // Inicializar gráfico al cargar la ventana por completo para asegurar dimensiones válidas
+        window.addEventListener('load', () => {
+            const chartContainer = document.getElementById('chart-container');
+            const chartWidth = chartContainer.clientWidth || 800;
 
-        // Bucle de Alta Frecuencia para Tiempo Real
-        setInterval(() => {
-            const currentTime = Math.floor(Date.now() / 1000);
-            let lastCandle = historicalData[historicalData.length - 1];
-            
-            const tickDelta = (Math.random() - 0.49) * 1.8;
-            currentMarketPrice = parseFloat((lastCandle.close + tickDelta).toFixed(2));
-            
-            document.getElementById('live-price-text').innerText = 'Mercado Activo: XAU/USD ($' + currentMarketPrice.toLocaleString() + ')';
+            const chart = LightweightCharts.createChart(chartContainer, {
+                width: chartWidth,
+                height: 350,
+                layout: { background: { type: 'solid', color: '#0b1120' }, textColor: '#94a3b8' },
+                grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
+                timeScale: { borderColor: '#334155', timeVisible: true, secondsVisible: true },
+                rightPriceScale: { borderColor: '#334155' },
+            });
 
-            if (currentTime - lastCandle.time >= 3) {
-                const newCandle = {
-                    time: currentTime,
-                    open: lastCandle.close,
-                    high: Math.max(lastCandle.close, currentMarketPrice),
-                    low: Math.min(lastCandle.close, currentMarketPrice),
-                    close: currentMarketPrice
-                };
-                historicalData.push(newCandle);
-                candlestickSeries.update(newCandle);
-            } else {
-                lastCandle.close = currentMarketPrice;
-                lastCandle.high = Math.max(lastCandle.high, currentMarketPrice);
-                lastCandle.low = Math.min(lastCandle.low, currentMarketPrice);
-                candlestickSeries.update(lastCandle);
+            candlestickSeries = chart.addCandlestickSeries({
+                upColor: '#34d399', downColor: '#ef4444', borderVisible: false,
+                wickUpColor: '#34d399', wickDownColor: '#ef4444',
+            });
+
+            const now = Math.floor(Date.now() / 1000);
+            let basePrice = 2750.00;
+            for (let i = 30; i > 0; i--) {
+                const time = now - (i * 3);
+                const open = basePrice;
+                const close = open + (Math.random() - 0.48) * 2.5;
+                const high = Math.max(open, close) + Math.random() * 1.2;
+                const low = Math.min(open, close) - Math.random() * 1.2;
+                historicalData.push({ time, open, high, low, close });
+                basePrice = close;
             }
-        }, 400);
+            candlestickSeries.setData(historicalData);
+            chart.timeScale().fitContent();
 
-        window.addEventListener('resize', () => {
-            chart.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
+            // Bucle en tiempo real
+            setInterval(() => {
+                const currentTime = Math.floor(Date.now() / 1000);
+                let lastCandle = historicalData[historicalData.length - 1];
+                
+                const tickDelta = (Math.random() - 0.49) * 1.8;
+                currentMarketPrice = parseFloat((lastCandle.close + tickDelta).toFixed(2));
+                
+                document.getElementById('live-price-text').innerText = 'Mercado Activo: XAU/USD ($' + currentMarketPrice.toLocaleString() + ')';
+
+                if (currentTime - lastCandle.time >= 3) {
+                    const newCandle = {
+                        time: currentTime,
+                        open: lastCandle.close,
+                        high: Math.max(lastCandle.close, currentMarketPrice),
+                        low: Math.min(lastCandle.close, currentMarketPrice),
+                        close: currentMarketPrice
+                    };
+                    historicalData.push(newCandle);
+                    candlestickSeries.update(newCandle);
+                } else {
+                    lastCandle.close = currentMarketPrice;
+                    lastCandle.high = Math.max(lastCandle.high, currentMarketPrice);
+                    lastCandle.low = Math.min(lastCandle.low, currentMarketPrice);
+                    candlestickSeries.update(lastCandle);
+                }
+            }, 400);
+
+            window.addEventListener('resize', () => {
+                chart.applyOptions({ width: chartContainer.clientWidth });
+            });
         });
 
-        // Generar Modelo Cuantitativo Dinámico basado en el precio actual
+        // Ejecutar Modelo Cuantitativo Dinámico
         async function runModel() {
             const resDiv = document.getElementById('results');
             resDiv.style.display = 'block';
             resDiv.innerHTML = '> Ejecutando simulaciones Monte Carlo sobre precio $' + currentMarketPrice + '...';
             
             try {
-                // Petición al backend pasando el precio actual para que el modelo genere métricas reales
                 const response = await fetch('/api/run-model?price=' + currentMarketPrice);
                 const data = await response.json();
                 
@@ -210,7 +221,7 @@ const server = http.createServer((req, res) => {
                                         '<strong>[PROB. ÉXITO]:</strong> ' + data.metrics.winProbability + '<br>' +
                                         '<strong>[RISK / REWARD]:</strong> ' + data.metrics.riskRewardRatio + '<br>' +
                                         '<strong>[ACCIÓN TÁCTICA]:</strong> <span style="color: #38bdf8;">' + data.metrics.recommendedAction + '</span>';
-                }, 400);
+                }, 300);
             } catch (err) {
                 resDiv.innerHTML = '<span style="color: #ef4444;">[ERROR]: Fallo en la generación del motor.</span>';
             }
@@ -218,16 +229,13 @@ const server = http.createServer((req, res) => {
     </script>
 </body>
 </html>`);
-    } 
-    // Endpoint Generativo del Modelo Cuantitativo
-    else if (req.url.startsWith('/api/run-model')) {
+    } else if (req.url.startsWith('/api/run-model')) {
         const urlParams = new URL(req.url, 'http://localhost').searchParams;
         const price = parseFloat(urlParams.get('price')) || 2750.00;
 
-        // Generación estocástica de métricas basadas en el precio actual del mercado
-        const ev = (Math.random() * 12 + 8).toFixed(2); // +8% a +20%
-        const winProb = (Math.random() * 10 + 52).toFixed(1); // 52% a 62%
-        const rr = (Math.random() * 0.8 + 1.5).toFixed(2); // 1.5 a 2.3
+        const ev = (Math.random() * 12 + 8).toFixed(2);
+        const winProb = (Math.random() * 10 + 52).toFixed(1);
+        const rr = (Math.random() * 0.8 + 1.5).toFixed(2);
         
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
@@ -249,5 +257,5 @@ const server = http.createServer((req, res) => {
 
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, '0.0.0.0', () => {
-    console.log(`[QUANTSCROW ENGINE] Servidor generativo activo en puerto ${PORT}`);
-});
+    console.log(`[QUANTSCROW ENGINE] Servidor activo en puerto ${PORT}`);
+})
