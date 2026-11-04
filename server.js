@@ -94,7 +94,7 @@ const server = http.createServer((req, res) => {
 
             <!-- Simulador de Capital -->
             <div class="box">
-                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo Real (+EV Model)</div>
+                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo Real (+EV Model v2)</div>
                 <div class="grid-2" style="margin-bottom: 0.75rem;">
                     <input type="number" id="capital" placeholder="Capital Inicial ($)" value="1000">
                     <button class="purple" onclick="runSim()">Calcular Proyección Real</button>
@@ -111,7 +111,7 @@ const server = http.createServer((req, res) => {
     </div>
 
     <script>
-        let mSeries, pSeries, pChart;
+        let mSeries, equityLineSeries, equityChartInstance;
 
         function init() {
             const mEl = document.getElementById('market-chart');
@@ -169,13 +169,14 @@ const server = http.createServer((req, res) => {
             document.getElementById('sim-metrics').style.display = 'grid';
 
             try {
-                if(!pChart) {
-                    pChart = LightweightCharts.createChart(sEl, {
+                if(!equityChartInstance) {
+                    equityChartInstance = LightweightCharts.createChart(sEl, {
                         width: sEl.clientWidth || 320, height: 220,
                         layout: { background: { type: 'solid', color: '#0b1120' }, textColor: '#94a3b8' },
                         grid: { vertLines: { visible: false }, horzLines: { color: '#1e293b' } }
                     });
-                    pSeries = pChart.addAreaSeries({ lineColor: '#a855f7', topColor: 'rgba(168, 85, 247, 0.4)', bottomColor: 'rgba(168, 85, 247, 0.0)' });
+                    // Usamos addLineSeries asegurado para evitar cualquier incompatibilidad
+                    equityLineSeries = equityChartInstance.addLineSeries({ color: '#a855f7', lineWidth: 3 });
                 }
 
                 const res = await fetch('/api/simulate?capital=' + cap);
@@ -183,8 +184,8 @@ const server = http.createServer((req, res) => {
                 
                 const data = await res.json();
                 
-                pSeries.setData(data.chartData);
-                pChart.timeScale().fitContent();
+                equityLineSeries.setData(data.chartData);
+                equityChartInstance.timeScale().fitContent();
 
                 document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
                 document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
@@ -207,8 +208,6 @@ const server = http.createServer((req, res) => {
             
             let balance = cap;
             let chartData = [];
-            
-            // Usamos marcas de tiempo numéricas (segundos) para evitar problemas de formato de fecha en Lightweight Charts
             let baseTime = Math.floor(Date.now() / 1000);
             
             const winProb = 0.584; // 58.4% de éxito
@@ -226,7 +225,6 @@ const server = http.createServer((req, res) => {
                     }
                 }
                 
-                // Timestamp diario (sumar 86400 segundos por día)
                 const timeStamp = baseTime + (i * 86400);
                 chartData.push({ time: timeStamp, value: parseFloat(balance.toFixed(2)) });
             }
