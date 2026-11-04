@@ -1,9 +1,6 @@
 const http = require('http');
 
-const server = http.createServer((req, res) => {
-    if (req.url === '/' || req.url === '/index.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(`<!DOCTYPE html>
+const htmlContent = `<!DOCTYPE html>
 <html lang="es">
 <head>
     <meta charset="UTF-8">
@@ -73,7 +70,6 @@ const server = http.createServer((req, res) => {
             <h1>Quantscrow Core</h1>
             <p class="subtitle">Terminal Institucional & Motor Cuantitativo +EV</p>
             
-            <!-- Panel Brokers -->
             <div class="box">
                 <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--accent-color); font-size: 0.9rem;">🔐 Enlace de Broker (Tier-1)</div>
                 <div class="grid-2">
@@ -89,11 +85,9 @@ const server = http.createServer((req, res) => {
                 <div id="auth-out" class="output"></div>
             </div>
 
-            <!-- Gráfica de Mercado -->
             <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--accent-color); font-size: 0.9rem;">📈 Live Market Feed (XAU/USD)</div>
             <div id="market-chart" class="chart-box" style="height: 260px;"></div>
 
-            <!-- Simulador de Capital -->
             <div class="box">
                 <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo Real (+EV Model)</div>
                 <div class="grid-2" style="margin-bottom: 0.75rem;">
@@ -134,7 +128,7 @@ const server = http.createServer((req, res) => {
             mSeries.setData(data);
             mChart.timeScale().fitContent();
 
-            setInterval(() => {
+            setInterval(function() {
                 const now = Math.floor(Date.now() / 1000);
                 const last = data[data.length - 1];
                 const nc = parseFloat((last.close + (Math.random() - 0.49) * 1.5).toFixed(2));
@@ -148,15 +142,15 @@ const server = http.createServer((req, res) => {
             }, 500);
         }
 
-        window.addEventListener('load', () => setTimeout(initMarket, 100));
+        window.addEventListener('load', function() { setTimeout(initMarket, 100); });
 
-        async function linkAccount() {
+        function linkAccount() {
             const acc = document.getElementById('acc').value;
             const out = document.getElementById('auth-out');
             out.style.display = 'block';
             if(!acc) { out.innerHTML = 'Error: Ingrese ID de cuenta.'; return; }
             out.innerHTML = 'Conectando con pasarela segura...';
-            setTimeout(() => {
+            setTimeout(function() {
                 out.innerHTML = 'ESTADO: CONEXIÓN ESTABLECIDA<br>SESIÓN: SECURE_' + Math.random().toString(36).substring(2,8).toUpperCase();
             }, 500);
         }
@@ -201,34 +195,38 @@ const server = http.createServer((req, res) => {
             box.appendChild(svg);
         }
 
-        async function runSim() {
+        function runSim() {
             const cap = document.getElementById('capital').value || 1000;
             const errDiv = document.getElementById('sim-error');
             errDiv.style.display = 'none';
             document.getElementById('sim-metrics').style.display = 'grid';
 
-            try {
-                const res = await fetch('/api/simulate?capital=' + cap);
-                if (!res.ok) throw new Error('Error HTTP: ' + res.status);
-                
-                const data = await res.json();
-                
-                renderSvgEquityCurve(data.chartData);
-
-                document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-            } catch(e) {
-                console.error(e);
-                errDiv.style.display = 'block';
-                errDiv.innerText = '[ERROR DE SIMULACIÓN]: ' + e.message;
-            }
+            fetch('/api/simulate?capital=' + cap)
+                .then(function(res) {
+                    if (!res.ok) throw new Error('Error HTTP: ' + res.status);
+                    return res.json();
+                })
+                .then(function(data) {
+                    renderSvgEquityCurve(data.chartData);
+                    document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                    document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                })
+                .catch(function(e) {
+                    console.error(e);
+                    errDiv.style.display = 'block';
+                    errDiv.innerText = '[ERROR DE SIMULACIÓN]: ' + e.message;
+                });
         }
     </script>
 </body>
-</html>`);
+</html>`;
+
+const server = http.createServer((req, res) => {
+    if (req.url === '/' || req.url === '/index.html') {
+        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+        res.end(htmlContent);
     } 
-    // BACKEND: Motor Cuantitativo Real con Probabilidad 58.4% y R/R 1:2.1
     else if (req.url.startsWith('/api/simulate')) {
         try {
             const u = new URL(req.url, 'http://localhost');
@@ -237,9 +235,9 @@ const server = http.createServer((req, res) => {
             let balance = cap;
             let chartData = [];
             
-            const winProb = 0.584; // 58.4% de éxito
-            const rewardRatio = 2.1; // R/R 1:2.1
-            const riskPerTrade = 0.01; // 1% de riesgo por operación
+            const winProb = 0.584; 
+            const rewardRatio = 2.1; 
+            const riskPerTrade = 0.01; 
             const tradesPerDay = 3;
 
             for(let i = 0; i < 365; i++) {
@@ -269,7 +267,7 @@ const server = http.createServer((req, res) => {
         }
     } else {
         res.writeHead(404);
-        res.end('404');
+        res.end('404 Not Found');
     }
 });
 
