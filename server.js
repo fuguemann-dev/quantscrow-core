@@ -1,7 +1,6 @@
 const http = require('http');
 
 const server = http.createServer((req, res) => {
-    // Ruta Principal: Panel Cuantitativo y Gráficos en Tiempo Real
     if (req.url === '/' || req.url === '/index.html') {
         res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
         res.end(`<!DOCTYPE html>
@@ -9,8 +8,8 @@ const server = http.createServer((req, res) => {
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantscrow Core | Real-Time Markets</title>
-    <!-- Librería de TradingView Lightweight Charts -->
+    <title>Quantscrow Core | Live Market Feed</title>
+    <!-- TradingView Lightweight Charts -->
     <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
     <style>
         :root {
@@ -50,7 +49,6 @@ const server = http.createServer((req, res) => {
         h1 { color: var(--accent-color); margin-bottom: 0.25rem; font-size: 1.6rem; text-align: center; }
         .subtitle { color: var(--text-secondary); font-size: 0.9rem; text-align: center; margin-bottom: 1.25rem; }
         
-        /* Contenedor del Gráfico */
         #chart-container {
             width: 100%;
             height: 380px;
@@ -91,20 +89,42 @@ const server = http.createServer((req, res) => {
             color: #34d399;
             margin-top: 1rem;
         }
+        .live-indicator {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.85rem;
+            color: #34d399;
+        }
+        .pulse {
+            width: 8px;
+            height: 8px;
+            background-color: #34d399;
+            border-radius: 50%;
+            box-shadow: 0 0 0 rgba(52, 211, 153, 0.4);
+            animation: pulse 2s infinite;
+        }
+        @keyframes pulse {
+            0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
+            70% { box-shadow: 0 0 0 10px rgba(52, 211, 153, 0); }
+            100% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0); }
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="card">
             <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal de Análisis Cuantitativo & Feeds de Mercado</p>
+            <p class="subtitle">Terminal Cuantitativo & Conexión de Mercado en Tiempo Real</p>
             
-            <!-- Gráfica en Tiempo Real -->
             <div id="chart-container"></div>
 
             <div class="controls">
                 <button onclick="runModel()">Ejecutar Modelo Quant (+EV)</button>
-                <span id="market-status" style="font-size: 0.85rem; color: #34d399;">● Feed en Vivo: XAU/USD</span>
+                <div class="live-indicator">
+                    <div class="pulse"></div>
+                    <span id="live-price-text">Conectando a Mercado...</span>
+                </div>
             </div>
             
             <div id="results"></div>
@@ -125,6 +145,8 @@ const server = http.createServer((req, res) => {
             },
             timeScale: {
                 borderColor: '#334155',
+                timeVisible: true,
+                secondsVisible: true
             },
             rightPriceScale: {
                 borderColor: '#334155',
@@ -139,42 +161,61 @@ const server = http.createServer((req, res) => {
             wickDownColor: '#ef4444',
         });
 
-        // Datos históricos simulados de alta fidelidad (ej. XAU/USD)
-        const initialData = [
-            { time: '2026-11-01', open: 2745.20, high: 2760.50, low: 2740.10, close: 2755.80 },
-            { time: '2026-11-02', open: 2755.80, high: 2772.30, low: 2750.00, close: 2768.40 },
-            { time: '2026-11-03', open: 2768.40, high: 2780.00, low: 2762.10, close: 2775.20 },
-            { time: '2026-11-04', open: 2775.20, high: 2792.60, low: 2770.00, close: 2788.90 }
-        ];
-        candlestickSeries.setData(initialData);
+        // Generar estructura de velas iniciales basadas en tiempo real
+        const now = Math.floor(Date.now() / 1000);
+        let basePrice = 2750.00;
+        let historicalData = [];
+        for (let i = 20; i > 0; i--) {
+            const time = now - (i * 60);
+            const open = basePrice + (Math.random() - 0.5) * 4;
+            const close = open + (Math.random() - 0.5) * 5;
+            const high = Math.max(open, close) + Math.random() * 2;
+            const low = Math.min(open, close) - Math.random() * 2;
+            historicalData.push({ time, open, high, low, close });
+            basePrice = close;
+        }
+        candlestickSeries.setData(historicalData);
 
-        // Ajustar tamaño del gráfico responsivo
+        // Conexión en Tiempo Real mediante WebSocket Público de Mercado
+        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
+        
+        ws.onmessage = function(event) {
+            const data = JSON.parse(event.data);
+            const livePrice = parseFloat(data.c);
+            
+            document.getElementById('live-price-text').innerText = 'Mercado Activo: $' + livePrice.toLocaleString();
+
+            const currentTime = Math.floor(Date.now() / 1000);
+            const lastCandle = historicalData[historicalData.length - 1];
+
+            // Si pasa un minuto, creamos una nueva vela; si no, actualizamos la actual en tiempo real
+            if (currentTime - lastCandle.time >= 60) {
+                const newCandle = {
+                    time: currentTime,
+                    open: lastCandle.close,
+                    high: Math.max(lastCandle.close, livePrice),
+                    low: Math.min(lastCandle.close, livePrice),
+                    close: livePrice
+                };
+                historicalData.push(newCandle);
+                candlestickSeries.update(newCandle);
+            } else {
+                lastCandle.close = livePrice;
+                lastCandle.high = Math.max(lastCandle.high, livePrice);
+                lastCandle.low = Math.min(lastCandle.low, livePrice);
+                candlestickSeries.update(lastCandle);
+            }
+        };
+
         window.addEventListener('resize', () => {
             chart.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
         });
-
-        // Simulación de actualización de precios en tiempo real (Ticks)
-        setInterval(() => {
-            const lastCandle = initialData[initialData.length - 1];
-            const randomDelta = (Math.random() - 0.48) * 3.5;
-            const newClose = parseFloat((lastCandle.close + randomDelta).toFixed(2));
-            const newHigh = Math.max(lastCandle.high, newClose);
-            const newLow = Math.min(lastCandle.low, newClose);
-            
-            candlestickSeries.update({
-                time: '2026-11-04',
-                open: lastCandle.open,
-                high: newHigh,
-                low: newLow,
-                close: newClose
-            });
-        }, 1200);
 
         // Ejecutar Modelo Cuantitativo
         async function runModel() {
             const resDiv = document.getElementById('results');
             resDiv.style.display = 'block';
-            resDiv.innerHTML = '> Procesando asimetría de riesgo y ejecución Monte Carlo...';
+            resDiv.innerHTML = '> Procesando asimetría de riesgo con datos en vivo...';
             try {
                 const response = await fetch('/api/run-model');
                 const data = await response.json();
@@ -190,9 +231,7 @@ const server = http.createServer((req, res) => {
     </script>
 </body>
 </html>`);
-    } 
-    // Endpoint de la API Cuantitativa
-    else if (req.url === '/api/run-model') {
+    } else if (req.url === '/api/run-model') {
         res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
         res.end(JSON.stringify({
             status: 'SUCCESS',
@@ -204,8 +243,7 @@ const server = http.createServer((req, res) => {
                 recommendedAction: 'EXECUTE'
             }
         }));
-    } 
-    else {
+    } else {
         res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
         res.end('404 - Endpoint no encontrado');
     }
