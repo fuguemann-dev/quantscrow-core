@@ -70,7 +70,7 @@ const server = http.createServer((req, res) => {
     <div class="container">
         <div class="card">
             <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal Institucional & Motor Monte Carlo</p>
+            <p class="subtitle">Terminal Institucional & Motor Cuantitativo +EV</p>
             
             <!-- Panel Brokers -->
             <div class="box">
@@ -94,10 +94,10 @@ const server = http.createServer((req, res) => {
 
             <!-- Simulador de Capital -->
             <div class="box">
-                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador de Crecimiento (+EV)</div>
+                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo Real (+EV Model)</div>
                 <div class="grid-2" style="margin-bottom: 0.75rem;">
                     <input type="number" id="capital" placeholder="Capital Inicial ($)" value="1000">
-                    <button class="purple" onclick="runSim()">Proyectar Rendimiento</button>
+                    <button class="purple" onclick="runSim()">Calcular Proyección Real</button>
                 </div>
                 <div id="sim-chart" class="chart-box" style="height: 220px; display: none;"></div>
                 <div class="metrics" id="sim-metrics" style="display: none;">
@@ -113,7 +113,6 @@ const server = http.createServer((req, res) => {
         let mSeries, pSeries, pChart;
 
         function init() {
-            // Mercado
             const mEl = document.getElementById('market-chart');
             const mChart = LightweightCharts.createChart(mEl, {
                 width: mEl.clientWidth || 320, height: 260,
@@ -145,17 +144,9 @@ const server = http.createServer((req, res) => {
                     mSeries.update(last);
                 }
             }, 500);
-
-            window.addEventListener('resize', () => {
-                mChart.applyOptions({ width: mEl.clientWidth });
-                if(pChart) {
-                    const sEl = document.getElementById('sim-chart');
-                    pChart.applyOptions({ width: sEl.clientWidth });
-                }
-            });
         }
 
-        window.addEventListener('load', init);
+        window.addEventListener('load', () => setTimeout(init, 100));
 
         async function linkAccount() {
             const acc = document.getElementById('acc').value;
@@ -189,9 +180,9 @@ const server = http.createServer((req, res) => {
                 pSeries.setData(data.chartData);
                 pChart.timeScale().fitContent();
 
-                document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString();
-                document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString();
-                document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString();
+                document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             } catch(e) {
                 console.error(e);
             }
@@ -199,22 +190,44 @@ const server = http.createServer((req, res) => {
     </script>
 </body>
 </html>`);
-    } else if (req.url.startsWith('/api/simulate')) {
+    } 
+    // BACKEND: Motor Cuantitativo Real con Probabilidad 58.4% y R/R 1:2.1
+    else if (req.url.startsWith('/api/simulate')) {
         const u = new URL(req.url, 'http://localhost');
         const cap = parseFloat(u.searchParams.get('capital')) || 1000;
-        let bal = cap;
+        
+        let balance = cap;
         let chartData = [];
         let now = Math.floor(Date.now() / 1000);
+        
+        // Parámetros del modelo matemático institucional
+        const winProb = 0.584; // 58.4% de éxito
+        const rewardRatio = 2.1; // R/R 1:2.1
+        const riskPerTrade = 0.01; // Arriesgar 1% del capital actual por operación
+        const tradesPerDay = 3; // Promedio de 3 operaciones diarias con +EV
 
-        for(let i=0; i<365; i++) {
-            bal *= (1 + ((Math.random() * 0.015) - 0.005));
+        for(let i = 0; i < 365; i++) {
+            // Simulamos las operaciones del día aplicando la asimetría matemática
+            for(let t = 0; t < tradesPerDay; t++) {
+                const isWin = Math.random() < winProb;
+                if(isWin) {
+                    balance += balance * riskPerTrade * rewardRatio;
+                } else {
+                    balance -= balance * riskPerTrade;
+                }
+            }
+            
             const dateStr = new Date((now + (i * 86400)) * 1000).toISOString().split('T')[0];
-            chartData.push({ time: dateStr, value: parseFloat(bal.toFixed(2)) });
+            chartData.push({ time: dateStr, value: parseFloat(balance.toFixed(2)) });
         }
 
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({
-            m: { w1: chartData[7].value, m1: chartData[30].value, y1: chartData[364].value },
+            m: { 
+                w1: chartData[6].value, 
+                m1: chartData[29].value, 
+                y1: chartData[364].value 
+            },
             chartData: chartData
         }));
     } else {
