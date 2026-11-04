@@ -68,7 +68,7 @@ const htmlContent = `<!DOCTYPE html>
     <div class="container">
         <div class="card">
             <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal Institucional & Motor Cuantitativo +EV</p>
+            <p class="subtitle">Terminal Institucional & Motor Cuantitativo Real</p>
             
             <div class="box">
                 <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--accent-color); font-size: 0.9rem;">🔐 Enlace de Broker (Tier-1)</div>
@@ -89,10 +89,10 @@ const htmlContent = `<!DOCTYPE html>
             <div id="market-chart" class="chart-box" style="height: 260px;"></div>
 
             <div class="box">
-                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo Real (+EV Model)</div>
+                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo (Días Hábiles & +EV Real)</div>
                 <div class="grid-2" style="margin-bottom: 0.75rem;">
                     <input type="number" id="capital" placeholder="Capital Inicial ($)" value="1000">
-                    <button class="purple" onclick="runSim()">Calcular Proyección Real</button>
+                    <button class="purple" onclick="runSim()">Calcular Proyección Realista</button>
                 </div>
                 
                 <div id="sim-chart" class="chart-box" style="display: none;"></div>
@@ -234,30 +234,38 @@ const server = http.createServer((req, res) => {
             
             let balance = cap;
             let chartData = [];
+            let baseTime = Math.floor(Date.now() / 1000);
             
-            const winProb = 0.584; 
-            const rewardRatio = 2.1; 
-            const riskPerTrade = 0.01; 
-            const tradesPerDay = 3;
-
+            const winProb = 0.584; // 58.4% de éxito
+            const rewardRatio = 2.1; // R/R 1:2.1
+            const riskPerTrade = 0.01; // 1% de riesgo por operación
+            
+            let dayCount = 0;
+            // Simulamos 365 días del año calendario, pero operando SOLO días hábiles (Lunes a Viernes)
             for(let i = 0; i < 365; i++) {
-                for(let t = 0; t < tradesPerDay; t++) {
+                let currentDate = new Date((baseTime + (i * 86400)) * 1000);
+                let dayOfWeek = currentDate.getDay(); // 0 es Domingo, 6 es Sábado
+                
+                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
+                    dayCount++;
+                    // 1 operación limpia de alta calidad al día
                     const isWin = Math.random() < winProb;
                     if(isWin) {
                         balance += balance * riskPerTrade * rewardRatio;
                     } else {
                         balance -= balance * riskPerTrade;
                     }
+                    chartData.push({ day: dayCount, value: parseFloat(balance.toFixed(2)) });
                 }
-                chartData.push({ day: i + 1, value: parseFloat(balance.toFixed(2)) });
             }
 
+            // Hitos seguros basados en el arreglo filtrado por días hábiles (~250 días de operativa)
             res.writeHead(200, { 'Content-Type': 'application/json' });
             res.end(JSON.stringify({
                 m: { 
-                    w1: chartData[6].value, 
-                    m1: chartData[29].value, 
-                    y1: chartData[364].value 
+                    w1: chartData[4] ? chartData[4].value : balance, // ~1 semana (5 días hábiles)
+                    m1: chartData[21] ? chartData[21].value : balance, // ~1 mes (22 días hábiles)
+                    y1: chartData[chartData.length - 1].value // 1 año completo de operaciones hábiles
                 },
                 chartData: chartData
             }));
