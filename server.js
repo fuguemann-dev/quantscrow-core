@@ -100,7 +100,6 @@ const server = http.createServer((req, res) => {
         let currentMarketPrice = 2750.00;
         let isAccountLinked = false;
 
-        // Autenticación de Broker
         async function linkAccount() {
             const accId = document.getElementById('account-id').value;
             const statusDiv = document.getElementById('auth-status');
@@ -129,7 +128,6 @@ const server = http.createServer((req, res) => {
             }
         }
 
-        // Renderizado Forzado y Garantizado de TradingView
         function initChart() {
             const container = document.getElementById('chart-container');
             const chart = LightweightCharts.createChart(container, {
@@ -159,7 +157,6 @@ const server = http.createServer((req, res) => {
             series.setData(data);
             chart.timeScale().fitContent();
 
-            // Feed en tiempo real indestructible
             setInterval(() => {
                 const t = Math.floor(Date.now() / 1000);
                 const last = data[data.length - 1];
@@ -182,14 +179,12 @@ const server = http.createServer((req, res) => {
             window.addEventListener('resize', () => chart.applyOptions({ width: container.clientWidth }));
         }
 
-        // Ejecutar al cargar el DOM para evitar pantallas negras en móvil
         if (document.readyState === 'complete' || document.readyState === 'interactive') {
             setTimeout(initChart, 100);
         } else {
             document.addEventListener('DOMContentLoaded', () => setTimeout(initChart, 100));
         }
 
-        // Motor Cuantitativo
         async function executeQuantModel() {
             const resDiv = document.getElementById('model-results');
             resDiv.style.display = 'block';
@@ -225,7 +220,7 @@ const server = http.createServer((req, res) => {
         const urlParams = new URL(req.url, 'http://localhost').searchParams;
         const price = urlParams.get('price') || '2750.00';
         
-        const winProb = (Math.random() * 12 + 51).toFixed(1); // 51% a 63%
+        const winProb = (Math.random() * 12 + 51).toFixed(1);
         const action = parseFloat(winProb) > 55 ? 'EXECUTE LONG (+EV)' : 'HOLD / ACCUMULATE';
         
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -244,4 +239,6 @@ const server = http.createServer((req, res) => {
 });
 
 const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', () => console.log(\`[QUANTSCROW] Servidor Maestro Activo en \${PORT}\`));
+server.listen(PORT, '0.0.0.0', () => {
+    console.log("[QUANTSCROW] Servidor Maestro Activo en puerto " + PORT);
+});
