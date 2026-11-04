@@ -14,7 +14,7 @@ const server = http.createServer((req, res) => {
         :root {
             --bg-color: #0f172a; --card-bg: #1e293b; --accent-color: #38bdf8; 
             --accent-hover: #0ea5e9; --text-primary: #f8fafc; --text-secondary: #94a3b8; 
-            --border-color: #334155; --success-color: #34d399; --proj-color: #a855f7;
+            --border-color: #334155; --success-color: #34d399; --proj-color: #a855f7; --danger-color: #ef4444;
         }
         body { 
             background-color: var(--bg-color); color: var(--text-primary); 
@@ -105,6 +105,7 @@ const server = http.createServer((req, res) => {
                     <div class="m-card"><div class="m-title">1 Mes</div><div class="m-val" id="v-1m">$0</div></div>
                     <div class="m-card"><div class="m-title">1 Año</div><div class="m-val" id="v-1y" style="color: var(--proj-color);">$0</div></div>
                 </div>
+                <div id="sim-error" class="output" style="color: var(--danger-color); display: none;"></div>
             </div>
         </div>
     </div>
@@ -162,21 +163,26 @@ const server = http.createServer((req, res) => {
         async function runSim() {
             const cap = document.getElementById('capital').value || 1000;
             const sEl = document.getElementById('sim-chart');
+            const errDiv = document.getElementById('sim-error');
+            errDiv.style.display = 'none';
             sEl.style.display = 'block';
             document.getElementById('sim-metrics').style.display = 'grid';
 
-            if(!pChart) {
-                pChart = LightweightCharts.createChart(sEl, {
-                    width: sEl.clientWidth || 320, height: 220,
-                    layout: { background: { type: 'solid', color: '#0b1120' }, textColor: '#94a3b8' },
-                    grid: { vertLines: { visible: false }, horzLines: { color: '#1e293b' } }
-                });
-                pSeries = pChart.addAreaSeries({ lineColor: '#a855f7', topColor: 'rgba(168, 85, 247, 0.4)', bottomColor: 'rgba(168, 85, 247, 0.0)' });
-            }
-
             try {
+                if(!pChart) {
+                    pChart = LightweightCharts.createChart(sEl, {
+                        width: sEl.clientWidth || 320, height: 220,
+                        layout: { background: { type: 'solid', color: '#0b1120' }, textColor: '#94a3b8' },
+                        grid: { vertLines: { visible: false }, horzLines: { color: '#1e293b' } }
+                    });
+                    pSeries = pChart.addAreaSeries({ lineColor: '#a855f7', topColor: 'rgba(168, 85, 247, 0.4)', bottomColor: 'rgba(168, 85, 247, 0.0)' });
+                }
+
                 const res = await fetch('/api/simulate?capital=' + cap);
+                if (!res.ok) throw new Error('Error HTTP: ' + res.status);
+                
                 const data = await res.json();
+                
                 pSeries.setData(data.chartData);
                 pChart.timeScale().fitContent();
 
@@ -185,6 +191,8 @@ const server = http.createServer((req, res) => {
                 document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
             } catch(e) {
                 console.error(e);
+                errDiv.style.display = 'block';
+                errDiv.innerText = '[ERROR DE SIMULACIÓN]: ' + e.message;
             }
         }
     </script>
@@ -193,43 +201,49 @@ const server = http.createServer((req, res) => {
     } 
     // BACKEND: Motor Cuantitativo Real con Probabilidad 58.4% y R/R 1:2.1
     else if (req.url.startsWith('/api/simulate')) {
-        const u = new URL(req.url, 'http://localhost');
-        const cap = parseFloat(u.searchParams.get('capital')) || 1000;
-        
-        let balance = cap;
-        let chartData = [];
-        let now = Math.floor(Date.now() / 1000);
-        
-        // Parámetros del modelo matemático institucional
-        const winProb = 0.584; // 58.4% de éxito
-        const rewardRatio = 2.1; // R/R 1:2.1
-        const riskPerTrade = 0.01; // Arriesgar 1% del capital actual por operación
-        const tradesPerDay = 3; // Promedio de 3 operaciones diarias con +EV
-
-        for(let i = 0; i < 365; i++) {
-            // Simulamos las operaciones del día aplicando la asimetría matemática
-            for(let t = 0; t < tradesPerDay; t++) {
-                const isWin = Math.random() < winProb;
-                if(isWin) {
-                    balance += balance * riskPerTrade * rewardRatio;
-                } else {
-                    balance -= balance * riskPerTrade;
-                }
-            }
+        try {
+            const u = new URL(req.url, 'http://localhost');
+            const cap = parseFloat(u.searchParams.get('capital')) || 1000;
             
-            const dateStr = new Date((now + (i * 86400)) * 1000).toISOString().split('T')[0];
-            chartData.push({ time: dateStr, value: parseFloat(balance.toFixed(2)) });
-        }
+            let balance = cap;
+            let chartData = [];
+            
+            // Usamos marcas de tiempo numéricas (segundos) para evitar problemas de formato de fecha en Lightweight Charts
+            let baseTime = Math.floor(Date.now() / 1000);
+            
+            const winProb = 0.584; // 58.4% de éxito
+            const rewardRatio = 2.1; // R/R 1:2.1
+            const riskPerTrade = 0.01; // 1% de riesgo por operación
+            const tradesPerDay = 3;
 
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-            m: { 
-                w1: chartData[6].value, 
-                m1: chartData[29].value, 
-                y1: chartData[364].value 
-            },
-            chartData: chartData
-        }));
+            for(let i = 0; i < 365; i++) {
+                for(let t = 0; t < tradesPerDay; t++) {
+                    const isWin = Math.random() < winProb;
+                    if(isWin) {
+                        balance += balance * riskPerTrade * rewardRatio;
+                    } else {
+                        balance -= balance * riskPerTrade;
+                    }
+                }
+                
+                // Timestamp diario (sumar 86400 segundos por día)
+                const timeStamp = baseTime + (i * 86400);
+                chartData.push({ time: timeStamp, value: parseFloat(balance.toFixed(2)) });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                m: { 
+                    w1: chartData[6].value, 
+                    m1: chartData[29].value, 
+                    y1: chartData[364].value 
+                },
+                chartData: chartData
+            }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
     } else {
         res.writeHead(404);
         res.end('404');
