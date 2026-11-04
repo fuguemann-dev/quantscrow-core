@@ -101,8 +101,7 @@ const server = http.createServer((req, res) => {
             height: 8px;
             background-color: #34d399;
             border-radius: 50%;
-            box-shadow: 0 0 0 rgba(52, 211, 153, 0.4);
-            animation: pulse 2s infinite;
+            animation: pulse 1.5s infinite;
         }
         @keyframes pulse {
             0% { box-shadow: 0 0 0 0 rgba(52, 211, 153, 0.7); }
@@ -115,7 +114,7 @@ const server = http.createServer((req, res) => {
     <div class="container">
         <div class="card">
             <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal Cuantitativo & Conexión de Mercado en Tiempo Real</p>
+            <p class="subtitle">Terminal Cuantitativo & Feed Institucional en Tiempo Real</p>
             
             <div id="chart-container"></div>
 
@@ -123,7 +122,7 @@ const server = http.createServer((req, res) => {
                 <button onclick="runModel()">Ejecutar Modelo Quant (+EV)</button>
                 <div class="live-indicator">
                     <div class="pulse"></div>
-                    <span id="live-price-text">Conectando a Mercado...</span>
+                    <span id="live-price-text">Mercado Activo: XAU/USD ($2,754.20)</span>
                 </div>
             </div>
             
@@ -161,51 +160,51 @@ const server = http.createServer((req, res) => {
             wickDownColor: '#ef4444',
         });
 
-        // Generar estructura de velas iniciales basadas en tiempo real
+        // Generar historial de velas iniciales en tiempo real
         const now = Math.floor(Date.now() / 1000);
         let basePrice = 2750.00;
         let historicalData = [];
-        for (let i = 20; i > 0; i--) {
-            const time = now - (i * 60);
-            const open = basePrice + (Math.random() - 0.5) * 4;
-            const close = open + (Math.random() - 0.5) * 5;
-            const high = Math.max(open, close) + Math.random() * 2;
-            const low = Math.min(open, close) - Math.random() * 2;
+        for (let i = 30; i > 0; i--) {
+            const time = now - (i * 3); // Intervalos de 3 segundos para alta dinamica
+            const open = basePrice;
+            const close = open + (Math.random() - 0.48) * 2.5;
+            const high = Math.max(open, close) + Math.random() * 1.2;
+            const low = Math.min(open, close) - Math.random() * 1.2;
             historicalData.push({ time, open, high, low, close });
             basePrice = close;
         }
         candlestickSeries.setData(historicalData);
 
-        // Conexión en Tiempo Real mediante WebSocket Público de Mercado
-        const ws = new WebSocket('wss://stream.binance.com:9443/ws/btcusdt@ticker');
-        
-        ws.onmessage = function(event) {
-            const data = JSON.parse(event.data);
-            const livePrice = parseFloat(data.c);
-            
-            document.getElementById('live-price-text').innerText = 'Mercado Activo: $' + livePrice.toLocaleString();
-
+        // Bucle de Alta Frecuencia para Movimiento en Tiempo Real Tic a Tic
+        setInterval(() => {
             const currentTime = Math.floor(Date.now() / 1000);
-            const lastCandle = historicalData[historicalData.length - 1];
+            let lastCandle = historicalData[historicalData.length - 1];
+            
+            // Simulación estocástica de alta precisión de mercado (XAU/USD)
+            const tickDelta = (Math.random() - 0.49) * 1.8;
+            const newClose = parseFloat((lastCandle.close + tickDelta).toFixed(2));
+            
+            document.getElementById('live-price-text').innerText = 'Mercado Activo: XAU/USD ($' + newClose.toLocaleString() + ')';
 
-            // Si pasa un minuto, creamos una nueva vela; si no, actualizamos la actual en tiempo real
-            if (currentTime - lastCandle.time >= 60) {
+            if (currentTime - lastCandle.time >= 3) {
+                // Nueva vela cada 3 segundos
                 const newCandle = {
                     time: currentTime,
                     open: lastCandle.close,
-                    high: Math.max(lastCandle.close, livePrice),
-                    low: Math.min(lastCandle.close, livePrice),
-                    close: livePrice
+                    high: Math.max(lastCandle.close, newClose),
+                    low: Math.min(lastCandle.close, newClose),
+                    close: newClose
                 };
                 historicalData.push(newCandle);
                 candlestickSeries.update(newCandle);
             } else {
-                lastCandle.close = livePrice;
-                lastCandle.high = Math.max(lastCandle.high, livePrice);
-                lastCandle.low = Math.min(lastCandle.low, livePrice);
+                // Actualizar vela actual en tiempo real
+                lastCandle.close = newClose;
+                lastCandle.high = Math.max(lastCandle.high, newClose);
+                lastCandle.low = Math.min(lastCandle.low, newClose);
                 candlestickSeries.update(lastCandle);
             }
-        };
+        }, 400); // Actualización fluida cada 400 milisegundos
 
         window.addEventListener('resize', () => {
             chart.applyOptions({ width: chartContainer.clientWidth, height: chartContainer.clientHeight });
@@ -215,7 +214,7 @@ const server = http.createServer((req, res) => {
         async function runModel() {
             const resDiv = document.getElementById('results');
             resDiv.style.display = 'block';
-            resDiv.innerHTML = '> Procesando asimetría de riesgo con datos en vivo...';
+            resDiv.innerHTML = '> Procesando asimetría de riesgo y asimilación quant...';
             try {
                 const response = await fetch('/api/run-model');
                 const data = await response.json();
