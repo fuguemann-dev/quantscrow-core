@@ -174,19 +174,20 @@ const server = http.createServer((req, res) => {
             svg.setAttribute("preserveAspectRatio", "none");
             svg.style.overflow = "visible";
 
-            const values = chartData.map(d => d.value);
-            const min = Math.min(...values);
-            const max = Math.max(...values);
+            const values = chartData.map(function(d) { return d.value; });
+            const min = Math.min.apply(null, values);
+            const max = Math.max.apply(null, values);
             const range = max - min || 1;
 
-            const points = chartData.map((d, index) => {
+            const pointsArray = chartData.map(function(d, index) {
                 const x = (index / (chartData.length - 1)) * 600;
                 const y = 180 - ((d.value - min) / range) * 150;
-                return \`\${x},\${y}\`;
-            }).join(" ");
+                return x + "," + y;
+            });
+            const points = pointsArray.join(" ");
 
             const polygon = document.createElementNS(svgNS, "polygon");
-            polygon.setAttribute("points", \`0,200 \${points} 600,200\`);
+            polygon.setAttribute("points", "0,200 " + points + " 600,200");
             polygon.setAttribute("fill", "rgba(168, 85, 247, 0.15)");
 
             const polyline = document.createElementNS(svgNS, "polyline");
@@ -211,3 +212,68 @@ const server = http.createServer((req, res) => {
                 if (!res.ok) throw new Error('Error HTTP: ' + res.status);
                 
                 const data = await res.json();
+                
+                renderSvgEquityCurve(data.chartData);
+
+                document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+                document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+            } catch(e) {
+                console.error(e);
+                errDiv.style.display = 'block';
+                errDiv.innerText = '[ERROR DE SIMULACIÓN]: ' + e.message;
+            }
+        }
+    </script>
+</body>
+</html>`);
+    } 
+    // BACKEND: Motor Cuantitativo Real con Probabilidad 58.4% y R/R 1:2.1
+    else if (req.url.startsWith('/api/simulate')) {
+        try {
+            const u = new URL(req.url, 'http://localhost');
+            const cap = parseFloat(u.searchParams.get('capital')) || 1000;
+            
+            let balance = cap;
+            let chartData = [];
+            
+            const winProb = 0.584; // 58.4% de éxito
+            const rewardRatio = 2.1; // R/R 1:2.1
+            const riskPerTrade = 0.01; // 1% de riesgo por operación
+            const tradesPerDay = 3;
+
+            for(let i = 0; i < 365; i++) {
+                for(let t = 0; t < tradesPerDay; t++) {
+                    const isWin = Math.random() < winProb;
+                    if(isWin) {
+                        balance += balance * riskPerTrade * rewardRatio;
+                    } else {
+                        balance -= balance * riskPerTrade;
+                    }
+                }
+                chartData.push({ day: i + 1, value: parseFloat(balance.toFixed(2)) });
+            }
+
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({
+                m: { 
+                    w1: chartData[6].value, 
+                    m1: chartData[29].value, 
+                    y1: chartData[364].value 
+                },
+                chartData: chartData
+            }));
+        } catch (err) {
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify({ error: err.message }));
+        }
+    } else {
+        res.writeHead(404);
+        res.end('404');
+    }
+});
+
+const PORT = process.env.PORT || 8080;
+server.listen(PORT, '0.0.0.0', function() {
+    console.log("Quantscrow Core activo en puerto " + PORT);
+});
