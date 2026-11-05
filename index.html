@@ -308,10 +308,43 @@
             document.getElementById('modalInversor').style.display = show ? 'flex' : 'none';
         }
 
-        function handleVincular(e) {
+        async function handleVincular(e) {
             e.preventDefault();
-            alert('Aprovisionando cuenta en MetaApi...');
-            toggleModalInversor(false);
+            
+            const submitBtn = e.target.querySelector('button[type="submit"]');
+            const originalText = submitBtn.innerText;
+            submitBtn.innerText = 'CONECTANDO CON CLÚSTER...';
+            submitBtn.disabled = true;
+
+            const payload = {
+                alias: e.target[0].value,
+                login: e.target[1].value,
+                password: e.target[2].value,
+                server: e.target[3].value
+            };
+
+            try {
+                const response = await fetch('/api/vincular-cuenta', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const data = await response.json();
+
+                if (data.success) {
+                    alert('¡Cuenta vinculada exitosamente con MetaApi!');
+                    toggleModalInversor(false);
+                    e.target.reset();
+                } else {
+                    alert('Error de aprovisionamiento: ' + data.error);
+                }
+            } catch (error) {
+                alert('Error crítico de red al comunicarse con el servidor Quantscrow.');
+            } finally {
+                submitBtn.innerText = originalText;
+                submitBtn.disabled = false;
+            }
         }
     </script>
 </body>
