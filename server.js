@@ -24,7 +24,7 @@ app.get('/health', (req, res) => {
   res.status(200).json({ status: 'ok', system: 'Quantscrow Core' });
 });
 
-// Endpoint para listar cuentas conectadas desde MetaApi
+// Endpoint para listar cuentas conectadas desde MetaApi (con mapeo seguro)
 app.get('/api/cuentas', async (req, res) => {
   try {
     if (!api) {
@@ -34,12 +34,12 @@ app.get('/api/cuentas', async (req, res) => {
     const accounts = await accountApi.getAccounts();
     
     const formattedAccounts = accounts.map(acc => ({
-      id: acc.id,
-      name: acc.name,
+      id: acc.id || acc._id,
+      name: acc.name || 'Cuenta MT5',
       login: acc.login,
       server: acc.server,
-      state: acc.state,
-      connectionStatus: acc.connectionStatus
+      state: acc.state || 'deployed',
+      connectionStatus: acc.connectionStatus || 'connected'
     }));
 
     return res.status(200).json({ success: true, accounts: formattedAccounts });
@@ -100,4 +100,4 @@ app.post('/api/vincular-cuenta', async (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[QUANTSCROW CORE] Motor Activo en puerto ${PORT}`);
-})
+});
