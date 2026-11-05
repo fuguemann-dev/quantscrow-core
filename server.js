@@ -109,6 +109,9 @@ app.post('/api/ejecutar', async (req, res) => {
     const resultado = await ejecutarComandoMaestro(tipo, balance);
     res.json(resultado);
 });
+app.get('/', (req, res) => {
+    res.sendFile(__dirname + '/index.html');
+});
 
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
