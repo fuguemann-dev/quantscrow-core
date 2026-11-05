@@ -125,3 +125,7 @@ async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
 }
 
 module.exports = { ejecutarComandoMaestro, gestionarBreakeven, esHorarioKillzone };
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log(`[QUANTSCROW CORE] Servidor activo y escuchando en el puerto ${PORT}`);
+});
