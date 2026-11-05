@@ -74,6 +74,8 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
+            flex-wrap: wrap;
+            gap: 15px;
         }
 
         .logo-area h1 {
@@ -108,7 +110,7 @@
             width: 100%;
         }
 
-        /* Grid de Métricas y Panel de Ejecución */
+        /* Grid de Métricas */
         .metrics-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -162,6 +164,7 @@
             color: var(--text-gold);
             font-size: 1rem;
             letter-spacing: 1px;
+            margin-bottom: 5px;
         }
 
         .btn-group {
@@ -194,7 +197,7 @@
         }
 
         #execution-log {
-            margin-top: 10px;
+            margin-top: 8px;
             font-size: 0.85rem;
             color: var(--text-gold);
             width: 100%;
@@ -214,6 +217,8 @@
             justify-content: space-between;
             align-items: center;
             margin-bottom: 20px;
+            flex-wrap: wrap;
+            gap: 10px;
         }
 
         .chart-header h2 {
@@ -260,7 +265,7 @@
             <h1>Quantscrow Core</h1>
             <p>Institutional Quantitative Risk & Execution Engine</p>
         </div>
-        <div class="status-badge" id="system-status">ONLINE [SECURE]</div>
+        <div class="status-badge" id="system-status">ONLINE [MATH-HARDENED]</div>
     </header>
 
     <!-- Main Dashboard -->
@@ -275,21 +280,21 @@
             </div>
             <div class="metric-card">
                 <h3>Ganancia Proyectada (A 30 Días)</h3>
-                <div class="value" id="projected-profit">$2,850.00 USD</div>
+                <div class="value">$2,850.00 USD</div>
                 <div class="subtext">Asimetría +EV & R:R 1:2.1</div>
             </div>
             <div class="metric-card">
                 <h3>Estado Killzone UTC</h3>
-                <div class="value" id="killzone-status" style="font-size: 1.4rem; padding-top: 5px;">ESPERANDO SESIÓN</div>
+                <div class="value" id="killzone-status" style="font-size: 1.4rem; padding-top: 5px;">VERIFICANDO...</div>
                 <div class="subtext">Londres / Nueva York</div>
             </div>
         </div>
 
-        <!-- Panel de Control de Disparos en Tiempo Real -->
+        <!-- Panel de Control de Disparos -->
         <div class="execution-panel">
             <div>
                 <h3>PANEL DE EJECUCIÓN CUANTITATIVA (XAU/USD)</h3>
-                <div id="execution-log">Estado del motor: Listo para evaluar asimetría institucional.</div>
+                <div id="execution-log">Estado del motor: Evaluando asimetría y blindaje matemático...</div>
             </div>
             <div class="btn-group">
                 <button class="btn-trade btn-buy" onclick="dispararOrden('BUY')">COMPRAR (BUY)</button>
@@ -301,7 +306,7 @@
         <div class="chart-section">
             <div class="chart-header">
                 <h2>CURVA DE RENDIMIENTO Y CRECIMIENTO PATRIMONIAL</h2>
-                <span style="color: var(--text-muted); font-size: 0.85rem;">XAU/USD - Motor Simulado</span>
+                <span style="color: var(--text-muted); font-size: 0.85rem;">XAU/USD - Motor Matemático Blindado</span>
             </div>
             <div class="chart-container">
                 <canvas id="quantChart"></canvas>
@@ -335,7 +340,7 @@
         // Función para disparar órdenes directo al servidor
         function dispararOrden(tipo) {
             const logDiv = document.getElementById('execution-log');
-            logDiv.innerText = `Enviando orden ${tipo} al motor cuantitativo en la nube...`;
+            logDiv.innerText = `Enviando orden ${tipo} aplicando blindaje matemático...`;
 
             fetch('/api/ejecutar', {
                 method: 'POST',
@@ -355,7 +360,7 @@
             });
         }
 
-        // Renderizado de Gráfica Cuantitativa de Lujo
+        // Renderizado de Gráfica Cuantitativa
         const ctx = document.getElementById('quantChart').getContext('2d');
         const quantChart = new Chart(ctx, {
             type: 'line',
