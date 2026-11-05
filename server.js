@@ -1,151 +1,108 @@
 const express = require('express');
-const path = require('path');
-const fs = require('fs');
+const { createClient } = require('@supabase/supabase-js');
+const { conectarNuevaCuentaMT5 } = require('./services/metaapiService');
+const MetaApi = require('metaapi-cloud-sdk').default;
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname)));
-
-// Memoria volátil para sincronización web en tiempo real
-const historialAuditoria = [];
-let ultimaEjecucionUtc = null; // Escudo contra duplicación de disparos en la misma Killzone
-
-// 1. Verificación de Ventanas Operativas (Killzones UTC)
-function esHorarioKillzone() {
-    const ahora = new Date();
-    const horaUTC = ahora.getUTCHours();
-    const minutoUTC = ahora.getUTCMinutes();
-    const horaDecimal = horaUTC + (minutoUTC / 60);
-
-    const esLondres = horaDecimal >= 7.0 && horaDecimal <= 10.0;
-    const esNuevaYork = horaDecimal >= 12.0 && horaDecimal <= 15.0;
-
-    return { activa: esLondres || esNuevaYork, sesion: esLondres ? 'LONDRES' : (esNuevaYork ? 'NUEVA_YORK' : 'NINGUNA') };
-}
-
-// 2. Registro de Auditoría Forense Dual (Memoria + CSV)
-function registrarAuditoria(ticketId, tipo, entrada, tp, sl, riesgoAplicado, balanceFinal) {
-    const timestamp = new Date().toISOString();
-    const registro = {
-        timestamp,
-        ticketId,
-        tipo,
-        entrada,
-        tp,
-        sl,
-        riesgo: `Riesgo_${riesgoAplicado}%`,
-        balanceFinal
-    };
-    
-    historialAuditoria.unshift(registro);
-
-    try {
-        const linea = `${timestamp},${ticketId},${tipo},${entrada},${tp},${sl},Riesgo_${riesgoAplicado}%,${balanceFinal}\n`;
-        if (!fs.existsSync('auditoria_trades.csv')) {
-            const encabezado = "Timestamp,TicketID,Tipo,Entrada,TakeProfit,StopLoss,FactorRiesgo,BalanceFinal\n";
-            fs.writeFileSync('auditoria_trades.csv', encabezado);
-        }
-        fs.appendFileSync('auditoria_trades.csv', linea);
-    } catch (e) {
-        console.error("Error al escribir en auditoria_trades.csv:", e.message);
-    }
-}
-
-// 3. Mitigación Dinámica de Varianza (Escudo Anti-Martingala)
-function calcularExposicionMatematica(balanceActual, rachaNegativaActual = 0) {
-    let factorRiesgo = 1.0; 
-    if (rachaNegativaActual >= 3) {
-        factorRiesgo = 0.5; // Reducción dinámica al 0.5% ante drawdown
-    }
-    const riesgoUSD = balanceActual * (factorRiesgo / 100);
-    return { riesgoUSD, factorRiesgo };
-}
-
-// 4. Núcleo de Ejecución Cuantitativa
-async function ejecutarComandoMaestro(tipoOrden = 'BUY', balanceActual = 1000.0, origen = 'MANUAL') {
-    const killzone = esHorarioKillzone();
-    
-    if (!killzone.activa) {
-        return { exito: false, razon: "Fuera de horario operativo (Killzone inactiva)" };
-    }
-
-    try {
-        const { riesgoUSD, factorRiesgo } = calcularExposicionMatematica(balanceActual);
-        const ticketId = `QC_${Math.floor(Math.random() * 900000) + 100000}`;
-        const precioEntrada = 2650.50; // Cotización base del activo (XAU/USD)
-        
-        const distanciaTP = 21 * 0.01; // Ratio R:R 1:2.1 (+EV)
-        const distanciaSL = 10 * 0.01;
-        const tp = tipoOrden === 'BUY' ? precioEntrada + distanciaTP : precioEntrada - distanciaTP;
-        const sl = tipoOrden === 'BUY' ? precioEntrada - distanciaSL : precioEntrada + distanciaSL;
-
-        registrarAuditoria(ticketId, tipoOrden, precioEntrada, tp, sl, factorRiesgo, balanceActual);
-        
-        console.log(`[QUANTSCROW EXECUTION] Ticket ${ticketId} procesado con éxito vía ${origen}.`);
-
-        return { 
-            exito: true, 
-            ticket: ticketId, 
-            entrada: precioEntrada, 
-            stopLoss: sl, 
-            takeProfit: tp, 
-            riesgoUSD,
-            origen,
-            asimetria: "+EV & R:R 1:2.1" 
-        };
-    } catch (error) {
-        return { exito: false, error: error.message };
-    }
-}
-
-// 5. MOTOR AUTÓNOMO (Ciclo en segundo plano - Evaluación continua cada 60s)
-const INTERVALO_EVALUACION_MS = 60000;
-
-setInterval(async () => {
-    const killzone = esHorarioKillzone();
-    const ahoraUTC = new Date().toISOString().substring(0, 13); // Identificador de hora UTC (YYYY-MM-DDTHH)
-
-    if (killzone.activa) {
-        // Dispara de forma autónoma una vez por cada bloque operativo activo
-        if (ultimaEjecucionUtc !== ahoraUTC) {
-            ultimaEjecucionUtc = ahoraUTC;
-            console.log(`[AUTONOMOUS ENGINE] Ventana ${killzone.sesion} detectada. Evaluando señal...`);
-            
-            // Alterna o evalúa según el algoritmo cuantitativo
-            const direccionMatematica = Math.random() > 0.5 ? 'BUY' : 'SELL';
-            await ejecutarComandoMaestro(direccionMatematica, 1000.0, 'AUTONOMO');
-        }
-    }
-}, INTERVALO_EVALUACION_MS);
-
-// 6. Rutas del Servidor REST
-app.get('/', (req, res) => {
-    res.sendFile(path.join(__dirname, 'index.html'));
-});
-
-app.get('/api/health', (req, res) => {
-    const killzone = esHorarioKillzone();
-    res.status(200).json({
-        status: "ONLINE",
-        project: "Quantscrow Core",
-        mode: "Autonomous Hardened Engine",
-        killzoneActive: killzone.activa,
-        sesionActual: killzone.sesion,
-        timestamp: new Date().toISOString()
-    });
-});
-
-app.get('/api/auditoria', (req, res) => {
-    res.json(historialAuditoria);
-});
-
-app.post('/api/ejecutar', async (req, res) => {
-    const { tipo = 'BUY', balance = 1000.0 } = req.body;
-    const resultado = await ejecutarComandoMaestro(tipo, balance, 'MANUAL');
-    res.json(resultado);
-});
 
 const PORT = process.env.PORT || 8080;
-app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[QUANTSCROW CORE] 🚀 Motor Autónomo activo y escuchando en puerto ${PORT}`);
+const META_TOKEN = process.env.META_API_TOKEN;
+const META_ACCOUNT_ID = process.env.META_ACCOUNT_ID; // Cuenta master inicial
+
+// Inicializar Supabase si las credenciales existen
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+
+// Validación de Killzones (Londres / Nueva York en UTC)
+function esHorarioKillzone() {
+  const ahora = new Date();
+  const horaUTC = ahora.getUTCHours();
+  const esLondres = horaUTC >= 7 && horaUTC < 10;
+  const esNY = horaUTC >= 13 && horaUTC < 16;
+  return esLondres || esNY;
+}
+
+// Health Check Endpoint
+app.get('/api/health', (req, res) => {
+  res.json({ estado: 'ONLINE', multicuenta: !!supabase, timestamp: new Date() });
+});
+
+// Endpoint principal de ejecución
+app.post('/api/ejecutar', async (req, res) => {
+  const force = req.query.force === 'true';
+  if (!force && !esHorarioKillzone()) {
+    return res.json({ exito: false, razon: 'Fuera de horario operativo (Killzone inactiva)' });
+  }
+
+  try {
+    const api = new MetaApi(META_TOKEN);
+
+    // 1. Si Supabase está conectado, dispara a TODAS las cuentas activas de inversores
+    if (supabase) {
+      const { data: cuentas } = await supabase.from('cuentas_trading').select('*').eq('estado', 'ACTIVA');
+      if (cuentas && cuentas.length > 0) {
+        cuentas.forEach(async (c) => {
+          try {
+            const account = await api.accountApi.getAccount(c.meta_account_id);
+            const connection = account.getRPCConnection();
+            await connection.connect();
+            await connection.waitSynchronized();
+            await connection.createMarketBuyOrder('XAUUSD', 0.01, { stopLoss: 10, takeProfit: 21 });
+          } catch (err) {
+            console.error(`Error procesando cuenta ${c.login_mt5}:`, err.message);
+          }
+        });
+        return res.json({ exito: true, mensaje: `Disparo masivo enviado a ${cuentas.length} cuentas activas` });
+      }
+    }
+
+    // 2. Fallback: Disparo a la cuenta única por defecto
+    const account = await api.accountApi.getAccount(META_ACCOUNT_ID);
+    const connection = account.getRPCConnection();
+    await connection.connect();
+    await connection.waitSynchronized();
+
+    const result = await connection.createMarketBuyOrder('XAUUSD', 0.01, {
+      stopLoss: 10,
+      takeProfit: 21
+    });
+
+    res.json({ exito: true, ticket: result.orderId });
+  } catch (error) {
+    res.status(500).json({ exito: false, error: error.message });
+  }
+});
+
+// Endpoint para vincular nuevas cuentas dinámicamente desde el Admin
+app.post('/api/admin/vincular-cuenta', async (req, res) => {
+  const { inversorId, loginMT5, passwordMT5, servidorBroker, nombreInversor } = req.body;
+
+  const metaRes = await conectarNuevaCuentaMT5({
+    login: loginMT5,
+    password: passwordMT5,
+    server: servidorBroker,
+    nombreInversor: nombreInversor || 'Inversor'
+  });
+
+  if (!metaRes.exito) {
+    return res.status(400).json({ exito: false, error: metaRes.error });
+  }
+
+  if (supabase) {
+    await supabase.from('cuentas_trading').insert([{
+      inversor_id: inversorId,
+      meta_account_id: metaRes.metaAccountId,
+      login_mt5: loginMT5,
+      servidor_broker: servidorBroker,
+      estado: 'ACTIVA'
+    }]);
+  }
+
+  res.json({ exito: true, metaAccountId: metaRes.metaAccountId });
+});
+
+app.listen(PORT, () => {
+  console.log(`[QUANTSCROW CORE] 🚀 Motor Multicuenta escuchando en puerto ${PORT}`);
 });
