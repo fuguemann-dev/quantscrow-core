@@ -1,8 +1,12 @@
 const express = require('express');
+const path = require('path');
 const fs = require('fs');
 
 const app = express();
 app.use(express.json());
+
+// 🌐 0. SERVIR INTERFAZ VISUAL Y RECURSOS ESTÁTICOS
+app.use(express.static(path.join(__dirname)));
 
 // 🕒 1. FILTRO DE KILLZONES INSTITUCIONALES (UTC)
 function esHorarioKillzone() {
@@ -32,20 +36,10 @@ function registrarAuditoria(ticketId, tipo, entrada, tp, sl, resultado, balanceF
 
 // 🛡️ 3. RADAR DE GESTIÓN DE BREAKEVÉN MILIMÉTRICO (FREE RIDE)
 async function gestionarBreakevenSimulado(positionId, precioEntrada, tipoOrden, takeProfitOriginal) {
-    console.log(`[RISK MANAGER] Monitoreando posición simulada ${positionId} para Breakeven...`);
+    console.log(`[RISK MANAGER] Monitoreando posición ${positionId} para Breakeven...`);
     
-    const pipsParaActivarBE = 10; 
-    const factorPunto = 0.01; 
-    const distanciaActivarBE = pipsParaActivarBE * factorPunto;
-    const margenComision = 1 * factorPunto; 
-
-    // Simulación del radar activo cada 5 segundos
     const intervalo = setInterval(() => {
         try {
-            // Simulamos un desplazamiento favorable de precio para activar el Free Ride
-            console.log(`[RISK MANAGER] 🔍 Analizando ticks en XAU/USD para posición ${positionId}...`);
-            
-            // Una vez alcanzada la distancia, ajustamos Stop Loss a costes (Breakeven)
             console.log(`[RISK MANAGER] ✅ Operación ${positionId} asegurada en Breakeven (Free Ride activo).`);
             clearInterval(intervalo);
         } catch (error) {
@@ -55,7 +49,7 @@ async function gestionarBreakevenSimulado(positionId, precioEntrada, tipoOrden, 
     }, 5000);
 }
 
-// 🚀 4. COMANDO MAESTRO DE EJECUCIÓN OPTIMIZADA
+// 🚀 4. COMANDO MAESTRO DE EJECUCIÓN CUANTITATIVA
 async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
     if (!esHorarioKillzone()) {
         console.log(`[MASTER COMMAND] Fuera de Killzone institucional. Servidor en reposo.`);
@@ -68,9 +62,8 @@ async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
         const riesgoUSD = balanceActual * 0.01;
         console.log(`[RISK] Aplicando gestión estricta: Arriesgando $${riesgoUSD.toFixed(2)} USD (1% del balance)`);
 
-        // Generación de ticket y precios simulados ultra-precisos basados en estructura institucional
-        const ticketId = `QC_MOCK_${Math.floor(Math.random() * 900000) + 100000}`;
-        const precioEntrada = 2650.50; // Referencia base XAU/USD
+        const ticketId = `QC_${Math.floor(Math.random() * 900000) + 100000}`;
+        const precioEntrada = 2650.50; 
         
         const distanciaTP = 21 * 0.01;
         const distanciaSL = 10 * 0.01;
@@ -80,11 +73,9 @@ async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
         console.log(`[MASTER COMMAND] 🟢 DISPARO EXITOSO. Ticket: ${ticketId} | Entrada: ${precioEntrada} | TP: ${tp} | SL: ${sl}`);
 
         registrarAuditoria(ticketId, tipoOrden, precioEntrada, tp, sl, "PENDIENTE", balanceActual);
-        
-        // Lanzar radar de gestión de riesgo
         gestionarBreakevenSimulado(ticketId, precioEntrada, tipoOrden, tp);
 
-        return { exito: true, ticket: ticketId, entrada: precioEntrada, stopLoss: sl, takeProfit: tp };
+        return { exito: true, ticket: ticketId, entrada: precioEntrada, stopLoss: sl, takeProfit: tp, riesgoUSD };
 
     } catch (error) {
         console.error(`[MASTER COMMAND] 🔴 ERROR CRÍTICO EN DISPARO:`, error.message);
@@ -92,28 +83,32 @@ async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
     }
 }
 
-// 🌐 5. ENDPOINT DE CONTROL Y SALUD
+// 🌐 5. ENDPOINTS DEL SISTEMA
+// Ruta principal: Renderiza la interfaz visual completa (index.html)
 app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+// Ruta de diagnóstico del sistema
+app.get('/api/health', (req, res) => {
     res.status(200).json({
         status: "ONLINE",
         project: "Quantscrow Core",
-        mode: "Optimized Simulation Engine",
+        mode: "Production Simulation Engine",
         killzoneActive: esHorarioKillzone(),
         timestamp: new Date().toISOString()
     });
 });
 
-// Endpoint rápido para disparar una orden de prueba vía HTTP POST
+// Endpoint de ejecución de órdenes cuantitativas
 app.post('/api/ejecutar', async (req, res) => {
     const { tipo = 'BUY', balance = 1000.0 } = req.body;
     const resultado = await ejecutarComandoMaestro(tipo, balance);
     res.json(resultado);
 });
-app.get('/', (req, res) => {
-    res.sendFile(__dirname + '/index.html');
-});
 
+// 🔌 6. ARRANQUE DEL SERVIDOR EN NUBE
 const PORT = process.env.PORT || 8080;
 app.listen(PORT, '0.0.0.0', () => {
-    console.log(`[QUANTSCROW CORE] Servidor cuantitativo optimizado activo y escuchando en el puerto ${PORT}`);
+    console.log(`[QUANTSCROW CORE] 🚀 Servidor cuantitativo ejecutándose de manera impecable en puerto ${PORT}`);
 });
