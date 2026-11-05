@@ -23,6 +23,15 @@ function registrarAuditoria(ticketId, tipo, entrada, tp, sl, resultado, balanceF
         const encabezado = "Timestamp,TicketID,Tipo,Entrada,TakeProfit,StopLoss,ResultadoUSD,BalanceFinal\n";
         fs.writeFileSync('auditoria_trades.csv', encabezado);
     }
+    const express = require('express');
+const app = express();
+
+// ... (aquí va toda la lógica de tus funciones y exportaciones que ya tienes) ...
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, () => {
+    console.log(`[QUANTSCROW CORE] Servidor activo y escuchando en el puerto ${PORT}`);
+});
     fs.appendFileSync('auditoria_trades.csv', linea);
 }
 
