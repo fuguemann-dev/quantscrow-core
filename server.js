@@ -1,4 +1,8 @@
+const express = require('express');
 const fs = require('fs');
+
+const app = express();
+app.use(express.json());
 
 // 🕒 1. FILTRO DE KILLZONES INSTITUCIONALES (UTC)
 function esHorarioKillzone() {
@@ -23,15 +27,6 @@ function registrarAuditoria(ticketId, tipo, entrada, tp, sl, resultado, balanceF
         const encabezado = "Timestamp,TicketID,Tipo,Entrada,TakeProfit,StopLoss,ResultadoUSD,BalanceFinal\n";
         fs.writeFileSync('auditoria_trades.csv', encabezado);
     }
-    const express = require('express');
-const app = express();
-
-// ... (aquí va toda la lógica de tus funciones y exportaciones que ya tienes) ...
-
-const PORT = process.env.PORT || 8080;
-app.listen(PORT, () => {
-    console.log(`[QUANTSCROW CORE] Servidor activo y escuchando en el puerto ${PORT}`);
-});
     fs.appendFileSync('auditoria_trades.csv', linea);
 }
 
@@ -133,8 +128,17 @@ async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
     }
 }
 
-module.exports = { ejecutarComandoMaestro, gestionarBreakeven, esHorarioKillzone };
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-    console.log(`[QUANTSCROW CORE] Servidor activo y escuchando en el puerto ${PORT}`);
+// 🌐 5. ENDPOINT DE ESTADO Y MANTENIMIENTO DE CONTENEDOR (Evita el exit code 0)
+app.get('/', (req, res) => {
+    res.status(200).json({
+        status: "ONLINE",
+        project: "Quantscrow Core",
+        killzoneActive: esHorarioKillzone(),
+        timestamp: new Date().toISOString()
+    });
 });
+
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[QUANTSCROW CORE] Servidor cuantitativo activo y escuchando en el puerto ${PORT}`);
+})
