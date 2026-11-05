@@ -1,5 +1,4 @@
 {
-{
   "name": "quantscrow-core",
   "version": "1.0.0",
   "main": "server.js",
@@ -9,6 +8,6 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.39.0",
     "express": "^4.19.2",
-    "metaapi-cloud-sdk": "*"
+    "metaapi-cloud-sdk": "^25.0.0"
   }
 }
