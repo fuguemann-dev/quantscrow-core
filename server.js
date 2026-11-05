@@ -1,285 +1,127 @@
-const http = require('http');
+const fs = require('fs');
 
-const htmlContent = `<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantscrow Core | Institutional Terminal</title>
-    <script src="https://unpkg.com/lightweight-charts/dist/lightweight-charts.standalone.production.js"></script>
-    <style>
-        :root {
-            --bg-color: #0f172a; --card-bg: #1e293b; --accent-color: #38bdf8; 
-            --accent-hover: #0ea5e9; --text-primary: #f8fafc; --text-secondary: #94a3b8; 
-            --border-color: #334155; --success-color: #34d399; --proj-color: #a855f7; --danger-color: #ef4444;
-        }
-        body { 
-            background-color: var(--bg-color); color: var(--text-primary); 
-            font-family: system-ui, -apple-system, sans-serif; 
-            display: flex; flex-direction: column; align-items: center; 
-            min-height: 100vh; margin: 0; padding: 1rem;
-        }
-        .container { width: 100%; max-width: 900px; display: flex; flex-direction: column; gap: 1.2rem; }
-        .card { 
-            background: var(--card-bg); padding: 1.25rem; border-radius: 1rem; 
-            box-shadow: 0 10px 25px rgba(0,0,0,0.5); border: 1px solid var(--border-color);
-        }
-        h1 { color: var(--accent-color); margin-bottom: 0.2rem; font-size: 1.5rem; text-align: center; }
-        .subtitle { color: var(--text-secondary); font-size: 0.85rem; text-align: center; margin-bottom: 1rem; }
-        
-        .box { background: var(--bg-color); padding: 1rem; border-radius: 0.5rem; border: 1px solid var(--border-color); margin-bottom: 1rem; }
-        .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-        @media (max-width: 600px) { .grid-2 { grid-template-columns: 1fr; } }
-        
-        input, select { 
-            width: 100%; padding: 0.75rem; border-radius: 0.4rem; border: 1px solid var(--border-color); 
-            background: #1e293b; color: var(--text-primary); font-size: 0.9rem; box-sizing: border-box;
-        }
-        input:focus, select:focus { outline: none; border-color: var(--accent-color); }
-        
-        .chart-box { 
-            width: 100%; height: 240px; background: #0b1120; border-radius: 0.5rem; 
-            overflow: hidden; margin-bottom: 1rem; border: 1px solid var(--border-color);
-            position: relative; display: flex; align-items: center; justify-content: center;
-        }
-        
-        button { 
-            background: var(--accent-color); color: var(--bg-color); border: none; 
-            padding: 0.8rem; border-radius: 0.5rem; font-weight: bold; cursor: pointer; 
-            font-size: 0.95rem; width: 100%; transition: background 0.2s;
-        }
-        button:hover { background: var(--accent-hover); }
-        button.purple { background: var(--proj-color); color: white; }
-        button.purple:hover { background: #9333ea; }
-        
-        .output { 
-            text-align: left; background: var(--bg-color); padding: 0.75rem; border-radius: 0.5rem; 
-            font-family: monospace; font-size: 0.85rem; display: none; 
-            border: 1px solid var(--border-color); color: var(--success-color); margin-top: 0.75rem;
-        }
-        
-        .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; margin-top: 0.75rem; }
-        .m-card { background: #0f172a; border: 1px solid var(--border-color); padding: 0.5rem; border-radius: 0.4rem; text-align: center; }
-        .m-title { font-size: 0.7rem; color: var(--text-secondary); text-transform: uppercase; }
-        .m-val { font-size: 1rem; font-weight: bold; color: var(--success-color); margin-top: 0.2rem; }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="card">
-            <h1>Quantscrow Core</h1>
-            <p class="subtitle">Terminal Institucional & Motor Cuantitativo Real</p>
-            
-            <div class="box">
-                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--accent-color); font-size: 0.9rem;">🔐 Enlace de Broker (Tier-1)</div>
-                <div class="grid-2">
-                    <select id="broker">
-                        <option value="hfm">HFM (Live / Micro-lots)</option>
-                        <option value="ibkr">Interactive Brokers</option>
-                        <option value="oanda">OANDA Core</option>
-                        <option value="binance">Binance Institutional</option>
-                    </select>
-                    <input type="text" id="acc" placeholder="ID de Cuenta o API Key">
-                </div>
-                <button style="margin-top: 0.75rem;" onclick="linkAccount()">Vincular Cuenta</button>
-                <div id="auth-out" class="output"></div>
-            </div>
+// 🕒 1. FILTRO DE KILLZONES INSTITUCIONALES (UTC)
+function esHorarioKillzone() {
+    const ahora = new Date();
+    const horaUTC = ahora.getUTCHours();
+    const minutoUTC = ahora.getUTCMinutes();
+    const horaDecimal = horaUTC + (minutoUTC / 60);
 
-            <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--accent-color); font-size: 0.9rem;">📈 Live Market Feed (XAU/USD)</div>
-            <div id="market-chart" class="chart-box" style="height: 260px;"></div>
+    // Londres (07:00 a 10:00 UTC) y Nueva York (12:00 a 15:00 UTC)
+    const esLondres = horaDecimal >= 7.0 && horaDecimal <= 10.0;
+    const esNuevaYork = horaDecimal >= 12.0 && horaDecimal <= 15.0;
 
-            <div class="box">
-                <div style="font-weight: bold; margin-bottom: 0.5rem; color: var(--proj-color); font-size: 0.9rem;">🚀 Simulador Cuantitativo (Días Hábiles & +EV Real)</div>
-                <div class="grid-2" style="margin-bottom: 0.75rem;">
-                    <input type="number" id="capital" placeholder="Capital Inicial ($)" value="1000">
-                    <button class="purple" onclick="runSim()">Calcular Proyección Realista</button>
-                </div>
-                
-                <div id="sim-chart" class="chart-box" style="display: none;"></div>
+    return esLondres || esNuevaYork;
+}
 
-                <div class="metrics" id="sim-metrics" style="display: none;">
-                    <div class="m-card"><div class="m-title">1 Semana</div><div class="m-val" id="v-1w">$0</div></div>
-                    <div class="m-card"><div class="m-title">1 Mes</div><div class="m-val" id="v-1m">$0</div></div>
-                    <div class="m-card"><div class="m-title">1 Año</div><div class="m-val" id="v-1y" style="color: var(--proj-color);">$0</div></div>
-                </div>
-                <div id="sim-error" class="output" style="color: var(--danger-color); display: none;"></div>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function initMarket() {
-            const mEl = document.getElementById('market-chart');
-            const mChart = LightweightCharts.createChart(mEl, {
-                width: mEl.clientWidth || 320, height: 260,
-                layout: { background: { type: 'solid', color: '#0b1120' }, textColor: '#94a3b8' },
-                grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } }
-            });
-            const mSeries = mChart.addCandlestickSeries({ upColor: '#34d399', downColor: '#ef4444' });
-
-            let data = [];
-            let t = Math.floor(Date.now() / 1000) - 200;
-            let p = 2750;
-            for(let i=0; i<40; i++) {
-                t += 5; let c = p + (Math.random() - 0.48) * 2;
-                data.push({ time: t, open: p, high: Math.max(p, c) + 1, low: Math.min(p, c) - 1, close: c });
-                p = c;
-            }
-            mSeries.setData(data);
-            mChart.timeScale().fitContent();
-
-            setInterval(function() {
-                const now = Math.floor(Date.now() / 1000);
-                const last = data[data.length - 1];
-                const nc = parseFloat((last.close + (Math.random() - 0.49) * 1.5).toFixed(2));
-                if(now - last.time >= 5) {
-                    const c = { time: now, open: last.close, high: Math.max(last.close, nc), low: Math.min(last.close, nc), close: nc };
-                    data.push(c); mSeries.update(c);
-                } else {
-                    last.close = nc; last.high = Math.max(last.high, nc); last.low = Math.min(last.low, nc);
-                    mSeries.update(last);
-                }
-            }, 500);
-        }
-
-        window.addEventListener('load', function() { setTimeout(initMarket, 100); });
-
-        function linkAccount() {
-            const acc = document.getElementById('acc').value;
-            const out = document.getElementById('auth-out');
-            out.style.display = 'block';
-            if(!acc) { out.innerHTML = 'Error: Ingrese ID de cuenta.'; return; }
-            out.innerHTML = 'Conectando con pasarela segura...';
-            setTimeout(function() {
-                out.innerHTML = 'ESTADO: CONEXIÓN ESTABLECIDA<br>SESIÓN: SECURE_' + Math.random().toString(36).substring(2,8).toUpperCase();
-            }, 500);
-        }
-
-        function renderSvgEquityCurve(chartData) {
-            const box = document.getElementById('sim-chart');
-            box.style.display = 'flex';
-            box.innerHTML = '';
-
-            const svgNS = "http://www.w3.org/2000/svg";
-            const svg = document.createElementNS(svgNS, "svg");
-            svg.setAttribute("width", "100%");
-            svg.setAttribute("height", "100%");
-            svg.setAttribute("viewBox", "0 0 600 200");
-            svg.setAttribute("preserveAspectRatio", "none");
-            svg.style.overflow = "visible";
-
-            const values = chartData.map(function(d) { return d.value; });
-            const min = Math.min.apply(null, values);
-            const max = Math.max.apply(null, values);
-            const range = max - min || 1;
-
-            const pointsArray = chartData.map(function(d, index) {
-                const x = (index / (chartData.length - 1)) * 600;
-                const y = 180 - ((d.value - min) / range) * 150;
-                return x + "," + y;
-            });
-            const points = pointsArray.join(" ");
-
-            const polygon = document.createElementNS(svgNS, "polygon");
-            polygon.setAttribute("points", "0,200 " + points + " 600,200");
-            polygon.setAttribute("fill", "rgba(168, 85, 247, 0.15)");
-
-            const polyline = document.createElementNS(svgNS, "polyline");
-            polyline.setAttribute("points", points);
-            polyline.setAttribute("fill", "none");
-            polyline.setAttribute("stroke", "#a855f7");
-            polyline.setAttribute("stroke-width", "3");
-
-            svg.appendChild(polygon);
-            svg.appendChild(polyline);
-            box.appendChild(svg);
-        }
-
-        function runSim() {
-            const cap = document.getElementById('capital').value || 1000;
-            const errDiv = document.getElementById('sim-error');
-            errDiv.style.display = 'none';
-            document.getElementById('sim-metrics').style.display = 'grid';
-
-            fetch('/api/simulate?capital=' + cap)
-                .then(function(res) {
-                    if (!res.ok) throw new Error('Error HTTP: ' + res.status);
-                    return res.json();
-                })
-                .then(function(data) {
-                    renderSvgEquityCurve(data.chartData);
-                    document.getElementById('v-1w').innerText = '$' + data.m.w1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    document.getElementById('v-1m').innerText = '$' + data.m.m1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                    document.getElementById('v-1y').innerText = '$' + data.m.y1.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2});
-                })
-                .catch(function(e) {
-                    console.error(e);
-                    errDiv.style.display = 'block';
-                    errDiv.innerText = '[ERROR DE SIMULACIÓN]: ' + e.message;
-                });
-        }
-    </script>
-</body>
-</html>`;
-
-const server = http.createServer((req, res) => {
-    if (req.url === '/' || req.url === '/index.html') {
-        res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-        res.end(htmlContent);
-    } 
-    else if (req.url.startsWith('/api/simulate')) {
-        try {
-            const u = new URL(req.url, 'http://localhost');
-            const cap = parseFloat(u.searchParams.get('capital')) || 1000;
-            
-            let balance = cap;
-            let chartData = [];
-            let baseTime = Math.floor(Date.now() / 1000);
-            
-            const winProb = 0.584; // 58.4% de éxito
-            const rewardRatio = 2.1; // R/R 1:2.1
-            const riskPerTrade = 0.01; // 1% de riesgo por operación
-            
-            let dayCount = 0;
-            // Simulamos 365 días del año calendario, pero operando SOLO días hábiles (Lunes a Viernes)
-            for(let i = 0; i < 365; i++) {
-                let currentDate = new Date((baseTime + (i * 86400)) * 1000);
-                let dayOfWeek = currentDate.getDay(); // 0 es Domingo, 6 es Sábado
-                
-                if (dayOfWeek !== 0 && dayOfWeek !== 6) {
-                    dayCount++;
-                    // 1 operación limpia de alta calidad al día
-                    const isWin = Math.random() < winProb;
-                    if(isWin) {
-                        balance += balance * riskPerTrade * rewardRatio;
-                    } else {
-                        balance -= balance * riskPerTrade;
-                    }
-                    chartData.push({ day: dayCount, value: parseFloat(balance.toFixed(2)) });
-                }
-            }
-
-            // Hitos seguros basados en el arreglo filtrado por días hábiles (~250 días de operativa)
-            res.writeHead(200, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({
-                m: { 
-                    w1: chartData[4] ? chartData[4].value : balance, // ~1 semana (5 días hábiles)
-                    m1: chartData[21] ? chartData[21].value : balance, // ~1 mes (22 días hábiles)
-                    y1: chartData[chartData.length - 1].value // 1 año completo de operaciones hábiles
-                },
-                chartData: chartData
-            }));
-        } catch (err) {
-            res.writeHead(500, { 'Content-Type': 'application/json' });
-            res.end(JSON.stringify({ error: err.message }));
-        }
-    } else {
-        res.writeHead(404);
-        res.end('404 Not Found');
+// 📝 2. SISTEMA DE AUDITORÍA Y REGISTRO EN FRÍO (CSV)
+function registrarAuditoria(ticketId, tipo, entrada, tp, sl, resultado, balanceFinal) {
+    const timestamp = new Date().toISOString();
+    const linea = `${timestamp},${ticketId},${tipo},${entrada},${tp},${sl},${resultado},${balanceFinal}\n`;
+    
+    if (!fs.existsSync('auditoria_trades.csv')) {
+        const encabezado = "Timestamp,TicketID,Tipo,Entrada,TakeProfit,StopLoss,ResultadoUSD,BalanceFinal\n";
+        fs.writeFileSync('auditoria_trades.csv', encabezado);
     }
-});
+    fs.appendFileSync('auditoria_trades.csv', linea);
+}
 
-const PORT = process.env.PORT || 8080;
-server.listen(PORT, '0.0.0.0', function() {
-    console.log("Quantscrow Core activo en puerto " + PORT);
-});
+// 🛡️ 3. RADAR DE GESTIÓN DE BREAKEVÉN MILIMÉTRICO (FREE RIDE)
+async function gestionarBreakeven(connection, positionId, precioEntrada, tipoOrden, takeProfitOriginal) {
+    console.log(`[RISK MANAGER] Monitoreando posición ${positionId} para Breakeven...`);
+    
+    const pipsParaActivarBE = 10; 
+    const factorPunto = 0.01; 
+    const distanciaActivarBE = pipsParaActivarBE * factorPunto;
+    const margenComision = 1 * factorPunto; 
+
+    const intervalo = setInterval(async () => {
+        try {
+            const position = await connection.getPosition(positionId);
+            if (!position) {
+                clearInterval(intervalo);
+                return;
+            }
+
+            const precioActual = position.currentPrice;
+            let nuevoStopLoss = null;
+            let debeAjustar = false;
+
+            if (tipoOrden === 'BUY' && precioActual >= precioEntrada + distanciaActivarBE) {
+                nuevoStopLoss = precioEntrada + margenComision;
+                if (position.stopLoss < nuevoStopLoss) debeAjustar = true;
+            } else if (tipoOrden === 'SELL' && precioActual <= precioEntrada - distanciaActivarBE) {
+                nuevoStopLoss = precioEntrada - margenComision;
+                if (position.stopLoss > nuevoStopLoss || position.stopLoss === 0) debeAjustar = true;
+            }
+
+            if (debeAjustar) {
+                await connection.modifyPosition(positionId, nuevoStopLoss, takeProfitOriginal);
+                console.log(`[RISK MANAGER] ✅ Operación ${positionId} asegurada en Breakeven.`);
+                clearInterval(intervalo);
+            }
+        } catch (error) {
+            console.error(`[RISK MANAGER] Error en radar de BE:`, error.message);
+        }
+    }, 5000);
+}
+
+// 🚀 4. COMANDO MAESTRO DE EJECUCIÓN CUANTITATIVA
+async function ejecutarComandoMaestro(tipoOrden, balanceActual) {
+    if (!esHorarioKillzone()) {
+        console.log(`[MASTER COMMAND] Fuera de Killzone institucional. Servidor en reposo.`);
+        return { exito: false, razon: "Fuera de horario operativo" };
+    }
+
+    const accountId = process.env.OANDA_ACCOUNT_ID;
+    const token = process.env.OANDA_API_TOKEN;
+
+    try {
+        console.log(`[MASTER COMMAND] 🎯 Killzone activa. Evaluando asimetría +EV en XAU/USD...`);
+        
+        const riesgoUSD = balanceActual * 0.01;
+        console.log(`[RISK] Aplicando gestión estricta: Arriesgando $${riesgoUSD.toFixed(2)} USD (1% del balance)`);
+
+        const response = await fetch(`https://api-fxpractice.oanda.com/v3/accounts/${accountId}/orders`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                order: {
+                    instrument: "XAU_USD",
+                    units: tipoOrden === 'BUY' ? "1" : "-1",
+                    type: "MARKET",
+                    positionFill: "DEFAULT"
+                }
+            })
+        });
+
+        const data = await response.json();
+        
+        if (!response.ok) {
+            throw new Error(data.errorMessage || "Fallo en la ejecución de la orden en OANDA");
+        }
+
+        const ticketId = data.orderFillTransaction.id;
+        const precioEntrada = parseFloat(data.orderFillTransaction.price);
+        
+        const distanciaTP = 21 * 0.01;
+        const distanciaSL = 10 * 0.01;
+        const tp = tipoOrden === 'BUY' ? precioEntrada + distanciaTP : precioEntrada - distanciaTP;
+        const sl = tipoOrden === 'BUY' ? precioEntrada - distanciaSL : precioEntrada + distanciaSL;
+
+        console.log(`[MASTER COMMAND] 🟢 DISPARO EXITOSO. Ticket: ${ticketId} | Entrada: ${precioEntrada} | TP: ${tp} | SL: ${sl}`);
+
+        registrarAuditoria(ticketId, tipoOrden, precioEntrada, tp, sl, "PENDIENTE", balanceActual);
+
+        return { exito: true, ticket: ticketId, entrada: precioEntrada, stopLoss: sl, takeProfit: tp };
+
+    } catch (error) {
+        console.error(`[MASTER COMMAND] 🔴 ERROR CRÍTICO EN DISPARO:`, error.message);
+        return { exito: false, error: error.message };
+    }
+}
+
+module.exports = { ejecutarComandoMaestro, gestionarBreakeven, esHorarioKillzone };
