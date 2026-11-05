@@ -1,399 +1,89 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantscrow Core | Institutional Trading Terminal</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-    <style>
-        :root {
-            --bg-obsidian: #0a0a0a;
-            --card-dark: #121212;
-            --border-gold: #d4af37;
-            --text-gold: #f3e5ab;
-            --text-main: #e0e0e0;
-            --text-muted: #888888;
-            --accent-green: #00ffcc;
-            --accent-red: #ff4d4d;
-        }
+const express = require('express');
+const path = require('path');
+const fs = require('fs');
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', SF Pro Display, -apple-system, sans-serif;
-        }
+const app = express();
+app.use(express.json());
 
-        body {
-            background-color: var(--bg-obsidian);
-            color: var(--text-main);
-            min-height: 100vh;
-            display: flex;
-            flex-direction: column;
-        }
+// Servir interfaz visual y recursos estáticos
+app.use(express.static(path.join(__dirname)));
 
-        /* Ticker de Wall Street */
-        .ticker-wrap {
-            width: 100%;
-            background: #000;
-            border-bottom: 1px solid var(--border-gold);
-            overflow: hidden;
-            white-space: nowrap;
-            height: 35px;
-            display: flex;
-            align-items: center;
-        }
+// Filtro de Killzones Institucionales (UTC)
+function esHorarioKillzone() {
+    const ahora = new Date();
+    const horaUTC = ahora.getUTCHours();
+    const minutoUTC = ahora.getUTCMinutes();
+    const horaDecimal = horaUTC + (minutoUTC / 60);
 
-        .ticker {
-            display: inline-block;
-            animation: ticker 30s linear infinite;
-            font-size: 0.85rem;
-            color: var(--text-gold);
-            font-weight: 600;
-        }
+    const esLondres = horaDecimal >= 7.0 && horaDecimal <= 10.0;
+    const esNuevaYork = horaDecimal >= 12.0 && horaDecimal <= 15.0;
 
-        .ticker-item {
-            margin-right: 40px;
-        }
+    return esLondres || esNuevaYork;
+}
 
-        .ticker-item span {
-            color: var(--accent-green);
-            margin-left: 5px;
-        }
-
-        @keyframes ticker {
-            0% { transform: translate3d(100%, 0, 0); }
-            100% { transform: translate3d(-100%, 0, 0); }
-        }
-
-        /* Header Ejecutivo */
-        header {
-            background: var(--card-dark);
-            border-bottom: 1px solid #222;
-            padding: 20px 40px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .logo-area h1 {
-            font-size: 1.5rem;
-            color: var(--text-gold);
-            letter-spacing: 2px;
-            text-transform: uppercase;
-        }
-
-        .logo-area p {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-        }
-
-        .status-badge {
-            background: rgba(212, 175, 55, 0.1);
-            border: 1px solid var(--border-gold);
-            color: var(--text-gold);
-            padding: 6px 15px;
-            border-radius: 4px;
-            font-size: 0.85rem;
-            font-weight: 600;
-            letter-spacing: 1px;
-        }
-
-        /* Contenedor Principal */
-        .container {
-            max-width: 1400px;
-            margin: 0 auto;
-            padding: 30px 20px;
-            flex: 1;
-            width: 100%;
-        }
-
-        /* Grid de Métricas y Panel de Ejecución */
-        .metrics-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-            gap: 20px;
-            margin-bottom: 30px;
-        }
-
-        .metric-card {
-            background: var(--card-dark);
-            border: 1px solid #222;
-            border-left: 3px solid var(--border-gold);
-            padding: 20px;
-            border-radius: 6px;
-        }
-
-        .metric-card h3 {
-            font-size: 0.85rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 8px;
-        }
-
-        .metric-card .value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--text-gold);
-        }
-
-        .metric-card .subtext {
-            font-size: 0.8rem;
-            color: var(--accent-green);
-            margin-top: 5px;
-        }
-
-        /* Panel de Control de Disparos */
-        .execution-panel {
-            background: var(--card-dark);
-            border: 1px solid var(--border-gold);
-            border-radius: 6px;
-            padding: 20px;
-            margin-bottom: 30px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 15px;
-        }
-
-        .execution-panel h3 {
-            color: var(--text-gold);
-            font-size: 1rem;
-            letter-spacing: 1px;
-        }
-
-        .btn-group {
-            display: flex;
-            gap: 15px;
-        }
-
-        .btn-trade {
-            padding: 10px 25px;
-            font-weight: 700;
-            border-radius: 4px;
-            cursor: pointer;
-            border: none;
-            letter-spacing: 1px;
-            transition: opacity 0.2s;
-        }
-
-        .btn-buy {
-            background-color: var(--accent-green);
-            color: #000;
-        }
-
-        .btn-sell {
-            background-color: var(--accent-red);
-            color: #fff;
-        }
-
-        .btn-trade:hover {
-            opacity: 0.85;
-        }
-
-        #execution-log {
-            margin-top: 10px;
-            font-size: 0.85rem;
-            color: var(--text-gold);
-            width: 100%;
-        }
-
-        /* Sección de Gráficos */
-        .chart-section {
-            background: var(--card-dark);
-            border: 1px solid #222;
-            border-radius: 6px;
-            padding: 25px;
-            margin-bottom: 30px;
-        }
-
-        .chart-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .chart-header h2 {
-            font-size: 1.1rem;
-            color: var(--text-gold);
-            letter-spacing: 1px;
-        }
-
-        .chart-container {
-            position: relative;
-            height: 350px;
-            width: 100%;
-        }
-
-        /* Footer */
-        footer {
-            background: var(--card-dark);
-            border-top: 1px solid #222;
-            text-align: center;
-            padding: 20px;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            letter-spacing: 1px;
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Ticker simulado de Wall Street -->
-    <div class="ticker-wrap">
-        <div class="ticker">
-            <span class="ticker-item">XAU/USD: 2,654.80 <span>+0.42%</span></span>
-            <span class="ticker-item">S&P 500: 5,870.20 <span>+0.18%</span></span>
-            <span class="ticker-item">NASDAQ: 18,740.10 <span>+0.35%</span></span>
-            <span class="ticker-item">EUR/USD: 1.0890 <span>-0.05%</span></span>
-            <span class="ticker-item">WTI CRUDE: 71.40 <span>+1.12%</span></span>
-            <span class="ticker-item">US10Y: 4.28% <span>-0.02%</span></span>
-        </div>
-    </div>
-
-    <!-- Header -->
-    <header>
-        <div class="logo-area">
-            <h1>Quantscrow Core</h1>
-            <p>Institutional Quantitative Risk & Execution Engine</p>
-        </div>
-        <div class="status-badge" id="system-status">ONLINE [SECURE]</div>
-    </header>
-
-    <!-- Main Dashboard -->
-    <main class="container">
+// Sistema de auditoría en CSV
+function registrarAuditoria(ticketId, tipo, entrada, tp, sl, resultado, balanceFinal) {
+    try {
+        const timestamp = new Date().toISOString();
+        const linea = `${timestamp},${ticketId},${tipo},${entrada},${tp},${sl},${resultado},${balanceFinal}\n`;
         
-        <!-- Tarjetas de Métricas Ejecutivas -->
-        <div class="metrics-grid">
-            <div class="metric-card">
-                <h3>Balance Operativo</h3>
-                <div class="value">$1,000.00 USD</div>
-                <div class="subtext">Riesgo por operación: 1.0% ($10.00)</div>
-            </div>
-            <div class="metric-card">
-                <h3>Ganancia Proyectada (A 30 Días)</h3>
-                <div class="value" id="projected-profit">$2,850.00 USD</div>
-                <div class="subtext">Asimetría +EV & R:R 1:2.1</div>
-            </div>
-            <div class="metric-card">
-                <h3>Estado Killzone UTC</h3>
-                <div class="value" id="killzone-status" style="font-size: 1.4rem; padding-top: 5px;">ESPERANDO SESIÓN</div>
-                <div class="subtext">Londres / Nueva York</div>
-            </div>
-        </div>
-
-        <!-- Panel de Control de Disparos en Tiempo Real -->
-        <div class="execution-panel">
-            <div>
-                <h3>PANEL DE EJECUCIÓN CUANTITATIVA (XAU/USD)</h3>
-                <div id="execution-log">Estado del motor: Listo para evaluar asimetría institucional.</div>
-            </div>
-            <div class="btn-group">
-                <button class="btn-trade btn-buy" onclick="dispararOrden('BUY')">COMPRAR (BUY)</button>
-                <button class="btn-trade btn-sell" onclick="dispararOrden('SELL')">VENDER (SELL)</button>
-            </div>
-        </div>
-
-        <!-- Panel de Gráficas Cuantitativas -->
-        <div class="chart-section">
-            <div class="chart-header">
-                <h2>CURVA DE RENDIMIENTO Y CRECIMIENTO PATRIMONIAL</h2>
-                <span style="color: var(--text-muted); font-size: 0.85rem;">XAU/USD - Motor Simulado</span>
-            </div>
-            <div class="chart-container">
-                <canvas id="quantChart"></canvas>
-            </div>
-        </div>
-
-    </main>
-
-    <!-- Footer -->
-    <footer>
-        <p>&copy; 2026 Quantscrow Core. Arquitectura Financiera de Alta Precisión.</p>
-    </footer>
-
-    <!-- Script de Control y Gráficos -->
-    <script>
-        // Sincronizar estado con el backend
-        fetch('/api/health')
-            .then(res => res.json())
-            .then(data => {
-                const badge = document.getElementById('killzone-status');
-                if(data.killzoneActive) {
-                    badge.innerText = "ACTIVA (KILLZONE)";
-                    badge.style.color = "var(--accent-green)";
-                } else {
-                    badge.innerText = "EN REPOSO";
-                    badge.style.color = "var(--text-muted)";
-                }
-            })
-            .catch(err => console.log('Modo autónomo activo'));
-
-        // Función para disparar órdenes directo al servidor
-        function dispararOrden(tipo) {
-            const logDiv = document.getElementById('execution-log');
-            logDiv.innerText = `Enviando orden ${tipo} al motor cuantitativo en la nube...`;
-
-            fetch('/api/ejecutar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tipo: tipo, balance: 1000.0 })
-            })
-            .then(res => res.json())
-            .then(data => {
-                if(data.exito) {
-                    logDiv.innerHTML = `🟢 <span style="color:var(--accent-green)">EJECUTADO</span> | Ticket: <b>${data.ticket}</b> | Entrada: ${data.entrada} | TP: ${data.takeProfit} | SL: ${data.stopLoss}`;
-                } else {
-                    logDiv.innerHTML = `⚠️ <span style="color:var(--accent-red)">REPOSO</span> | Razón: ${data.razon || data.error}`;
-                }
-            })
-            .catch(err => {
-                logDiv.innerHTML = `🔴 Error de comunicación con el servidor.`;
-            });
+        if (!fs.existsSync('auditoria_trades.csv')) {
+            const encabezado = "Timestamp,TicketID,Tipo,Entrada,TakeProfit,StopLoss,ResultadoUSD,BalanceFinal\n";
+            fs.writeFileSync('auditoria_trades.csv', encabezado);
         }
+        fs.appendFileSync('auditoria_trades.csv', linea);
+    } catch (e) {
+        console.error("Error al escribir auditoría CSV:", e.message);
+    }
+}
 
-        // Renderizado de Gráfica Cuantitativa de Lujo
-        const ctx = document.getElementById('quantChart').getContext('2d');
-        const quantChart = new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels: ['Semana 1', 'Semana 2', 'Semana 3', 'Semana 4', 'Semana 5', 'Semana 6', 'Semana 7', 'Semana 8'],
-                datasets: [{
-                    label: 'Crecimiento de Capital ($)',
-                    data: [1000, 1045, 1110, 1090, 1180, 1260, 1340, 1450],
-                    borderColor: '#d4af37',
-                    backgroundColor: 'rgba(212, 175, 55, 0.08)',
-                    borderWidth: 2.5,
-                    fill: true,
-                    tension: 0.35,
-                    pointBackgroundColor: '#d4af37',
-                    pointBorderColor: '#0a0a0a',
-                    pointRadius: 4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { 
-                        labels: { color: '#f3e5ab', font: { family: 'Segoe UI', weight: '600' } } 
-                    }
-                },
-                scales: {
-                    x: { 
-                        ticks: { color: '#888888' }, 
-                        grid: { color: 'rgba(255, 255, 255, 0.04)' } 
-                    },
-                    y: { 
-                        ticks: { color: '#888888' }, 
-                        grid: { color: 'rgba(255, 255, 255, 0.04)' } 
-                    }
-                }
-            }
-        });
-    </script>
-</body>
-</html>
+// Comando maestro de ejecución cuantitativa
+async function ejecutarComandoMaestro(tipoOrden = 'BUY', balanceActual = 1000.0) {
+    if (!esHorarioKillzone()) {
+        return { exito: false, razon: "Fuera de horario operativo" };
+    }
+
+    try {
+        const riesgoUSD = balanceActual * 0.01;
+        const ticketId = `QC_${Math.floor(Math.random() * 900000) + 100000}`;
+        const precioEntrada = 2650.50; 
+        
+        const distanciaTP = 21 * 0.01;
+        const distanciaSL = 10 * 0.01;
+        const tp = tipoOrden === 'BUY' ? precioEntrada + distanciaTP : precioEntrada - distanciaTP;
+        const sl = tipoOrden === 'BUY' ? precioEntrada - distanciaSL : precioEntrada + distanciaSL;
+
+        registrarAuditoria(ticketId, tipoOrden, precioEntrada, tp, sl, "PENDIENTE", balanceActual);
+
+        return { exito: true, ticket: ticketId, entrada: precioEntrada, stopLoss: sl, takeProfit: tp, riesgoUSD };
+    } catch (error) {
+        return { exito: false, error: error.message };
+    }
+}
+
+// Endpoints
+app.get('/', (req, res) => {
+    res.sendFile(path.join(__dirname, 'index.html'));
+});
+
+app.get('/api/health', (req, res) => {
+    res.status(200).json({
+        status: "ONLINE",
+        project: "Quantscrow Core",
+        mode: "Production Stable Engine",
+        killzoneActive: esHorarioKillzone(),
+        timestamp: new Date().toISOString()
+    });
+});
+
+app.post('/api/ejecutar', async (req, res) => {
+    const { tipo = 'BUY', balance = 1000.0 } = req.body;
+    const resultado = await ejecutarComandoMaestro(tipo, balance);
+    res.json(resultado);
+});
+
+// Arranque del servidor
+const PORT = process.env.PORT || 8080;
+app.listen(PORT, '0.0.0.0', () => {
+    console.log(`[QUANTSCROW CORE] 🚀 Servidor estable en puerto ${PORT}`);
+});
