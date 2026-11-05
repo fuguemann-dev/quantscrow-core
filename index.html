@@ -1,351 +1,103 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quantscrow Core | Terminal Financiera</title>
-    <style>
-        :root {
-            --bg-dark: #0a0b0d;
-            --card-bg: #121418;
-            --border-gold: #c5a059;
-            --gold-primary: #d4af37;
-            --gold-hover: #f1c40f;
-            --text-light: #e0e0e0;
-            --text-muted: #8a8f99;
-            --success: #2ea043;
-        }
+const express = require('express');
+const path = require('path');
+const { createClient } = require('@supabase/supabase-js');
+const MetaApi = require('metaapi.cloud-sdk').default || require('metaapi.cloud-sdk');
 
-        * {
-            box-sizing: border-box;
-            margin: 0;
-            padding: 0;
-            font-family: 'Segoe UI', -apple-system, BlinkMacSystemFont, Roboto, sans-serif;
-        }
+const app = express();
+const PORT = process.env.PORT || 8080;
 
-        body {
-            background-color: var(--bg-dark);
-            color: var(--text-light);
-            padding: 24px;
-        }
+const supabaseUrl = process.env.SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_KEY;
+const metaApiToken = process.env.META_API_TOKEN;
 
-        /* Top Bar Navigation */
-        .qc-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-bottom: 24px;
-            border-bottom: 1px solid rgba(197, 160, 89, 0.2);
-            margin-bottom: 32px;
-        }
+const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
+const api = metaApiToken ? new MetaApi(metaApiToken) : null;
 
-        .qc-brand {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
+app.use(express.json());
+app.use(express.static(__dirname));
 
-        .qc-brand h1 {
-            font-size: 1.5rem;
-            letter-spacing: 1px;
-            color: var(--gold-primary);
-            text-transform: uppercase;
-        }
+app.get('/', (req, res) => {
+  res.sendFile(path.join(__dirname, 'index.html'));
+});
 
-        .qc-btn-gold {
-            background: linear-gradient(135deg, #c5a059 0%, #d4af37 100%);
-            color: #000;
-            border: none;
-            padding: 10px 20px;
-            font-weight: 700;
-            font-size: 0.85rem;
-            letter-spacing: 0.5px;
-            border-radius: 4px;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            transition: all 0.2s ease;
-        }
+app.get('/health', (req, res) => {
+  res.status(200).json({ status: 'ok', system: 'Quantscrow Core' });
+});
 
-        .qc-btn-gold:hover {
-            background: var(--gold-hover);
-            box-shadow: 0 0 12px rgba(212, 175, 55, 0.4);
-        }
+// Endpoint para listar cuentas conectadas desde MetaApi
+app.get('/api/cuentas', async (req, res) => {
+  try {
+    if (!api) {
+      return res.status(200).json({ success: true, accounts: [] });
+    }
+    const accountApi = api.metatraderAccountApi;
+    const accounts = await accountApi.getAccounts();
+    
+    const formattedAccounts = accounts.map(acc => ({
+      id: acc.id,
+      name: acc.name,
+      login: acc.login,
+      server: acc.server,
+      state: acc.state,
+      connectionStatus: acc.connectionStatus
+    }));
 
-        /* Metrics Grid */
-        .qc-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
-            gap: 20px;
-            margin-bottom: 32px;
-        }
+    return res.status(200).json({ success: true, accounts: formattedAccounts });
+  } catch (err) {
+    console.error('[QUANTSCROW ERROR]', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-        .qc-card {
-            background: var(--card-bg);
-            border: 1px solid rgba(197, 160, 89, 0.15);
-            border-radius: 6px;
-            padding: 20px;
-        }
+// Endpoint crítico de aprovisionamiento MT5
+app.post('/api/vincular-cuenta', async (req, res) => {
+  const { alias, login, password, server } = req.body;
 
-        .qc-card-title {
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            margin-bottom: 8px;
-        }
+  if (!login || !password || !server) {
+    return res.status(400).json({ 
+      success: false, 
+      error: 'Parámetros incompletos. Se requiere login, contraseña y servidor.' 
+    });
+  }
 
-        .qc-card-value {
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: #fff;
-        }
+  try {
+    let metaAccountId = null;
 
-        .qc-card-sub {
-            font-size: 0.75rem;
-            color: var(--success);
-            margin-top: 6px;
-        }
+    if (api) {
+      const account = await api.metatraderAccountApi.createAccount({
+        name: alias || `MT5-${login}`,
+        type: 'cloud',
+        login: login.toString(),
+        password: password,
+        server: server,
+        platform: 'mt5',
+        magic: 100001
+      });
+      metaAccountId = account.id;
+    }
 
-        /* Table Section */
-        .qc-section {
-            background: var(--card-bg);
-            border: 1px solid rgba(197, 160, 89, 0.15);
-            border-radius: 6px;
-            padding: 24px;
-        }
+    if (supabase) {
+      await supabase.from('cuentas_mt5').insert([{
+        alias: alias || `MT5-${login}`,
+        login: login,
+        server: server,
+        meta_account_id: metaAccountId,
+        created_at: new Date()
+      }]);
+    }
 
-        .qc-section-header {
-            margin-bottom: 16px;
-            font-size: 1.1rem;
-            color: var(--gold-primary);
-        }
+    return res.status(200).json({
+      success: true,
+      message: 'Cuenta vinculada correctamente en el clúster.',
+      metaAccountId
+    });
 
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            text-align: left;
-            font-size: 0.9rem;
-        }
+  } catch (err) {
+    console.error('[QUANTSCROW ERROR]', err.message);
+    return res.status(500).json({ success: false, error: err.message });
+  }
+});
 
-        th, td {
-            padding: 12px 16px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-
-        th {
-            color: var(--text-muted);
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-        }
-
-        /* Modal Overlays */
-        .qc-modal-overlay {
-            display: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(4px);
-            justify-content: center;
-            align-items: center;
-            z-index: 1000;
-        }
-
-        .qc-modal-card {
-            background: var(--card-bg);
-            border: 1px solid var(--border-gold);
-            border-radius: 8px;
-            width: 100%;
-            max-width: 440px;
-            padding: 28px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.8);
-        }
-
-        .qc-modal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 20px;
-        }
-
-        .qc-modal-header h3 {
-            color: var(--gold-primary);
-            font-size: 1.1rem;
-        }
-
-        .qc-close {
-            background: none;
-            border: none;
-            color: var(--text-muted);
-            font-size: 1.2rem;
-            cursor: pointer;
-        }
-
-        .qc-form-group {
-            margin-bottom: 16px;
-        }
-
-        .qc-form-group label {
-            display: block;
-            font-size: 0.8rem;
-            color: var(--text-muted);
-            margin-bottom: 6px;
-        }
-
-        .qc-form-group input, .qc-form-group select {
-            width: 100%;
-            padding: 10px;
-            background: #000;
-            border: 1px solid rgba(197, 160, 89, 0.3);
-            border-radius: 4px;
-            color: #fff;
-            outline: none;
-        }
-
-        .qc-form-group input:focus {
-            border-color: var(--gold-primary);
-        }
-    </style>
-</head>
-<body>
-
-    <!-- Header Navigation -->
-    <header class="qc-header">
-        <div class="qc-brand">
-            <h1>Quantscrow Core</h1>
-        </div>
-        <button onclick="toggleModalInversor(true)" class="qc-btn-gold">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round">
-                <line x1="12" y1="5" x2="12" y2="19"></line>
-                <line x1="5" y1="12" x2="19" y2="12"></line>
-            </svg>
-            <span>VINCULAR CUENTA</span>
-        </button>
-    </header>
-
-    <!-- Metrics Dashboard -->
-    <main>
-        <section class="qc-grid">
-            <div class="qc-card">
-                <div class="qc-card-title">Capital Total Bajo Gestión</div>
-                <div class="qc-card-value">$0.00 USD</div>
-                <div class="qc-card-sub">Conexión MT5 lista</div>
-            </div>
-            <div class="qc-card">
-                <div class="qc-card-title">Retorno Cuantitativo (+EV)</div>
-                <div class="qc-card-value">0.00%</div>
-                <div class="qc-card-sub">Sin posiciones activas</div>
-            </div>
-            <div class="qc-card">
-                <div class="qc-card-title">Cuentas Conectadas</div>
-                <div class="qc-card-value">0</div>
-                <div class="qc-card-sub">MetaApi MetaTrader 5</div>
-            </div>
-        </section>
-
-        <!-- Account List Section -->
-        <section class="qc-section">
-            <h2 class="qc-section-header">Cuentas de Inversión Vinculadas</h2>
-            <table>
-                <thead>
-                    <tr>
-                        <th>ID Cuenta / Servidor</th>
-                        <th>Broker</th>
-                        <th>Balance</th>
-                        <th>Equidad</th>
-                        <th>Estado Algoritmo</th>
-                    </tr>
-                </thead>
-                <tbody id="accounts-list">
-                    <tr>
-                        <td colspan="5" style="text-align: center; color: var(--text-muted); padding: 24px;">
-                            No hay cuentas vinculadas. Haz clic en <strong>+ VINCULAR CUENTA</strong> para registrar una cuenta MT5.
-                        </td>
-                    </tr>
-                </tbody>
-            </table>
-        </section>
-    </main>
-
-    <!-- Modal Provisioning Form -->
-    <div id="modalInversor" class="qc-modal-overlay">
-        <div class="qc-modal-card">
-            <div class="qc-modal-header">
-                <h3>Vincular Cuenta MT5</h3>
-                <button onclick="toggleModalInversor(false)" class="qc-close">&times;</button>
-            </div>
-            <form id="form-vincular" onsubmit="handleVincular(event)">
-                <div class="qc-form-group">
-                    <label>Nombre de la Cuenta / Alias</label>
-                    <input type="text" placeholder="Ej. Cuenta Principal FTMO" required>
-                </div>
-                <div class="qc-form-group">
-                    <label>Login MT5 (Número de Cuenta)</label>
-                    <input type="number" placeholder="12345678" required>
-                </div>
-                <div class="qc-form-group">
-                    <label>Contraseña Inversora / Read-Only</label>
-                    <input type="password" placeholder="••••••••" required>
-                </div>
-                <div class="qc-form-group">
-                    <label>Servidor Broker MT5</label>
-                    <input type="text" placeholder="Ej. FTMO-Server" required>
-                </div>
-                <button type="submit" class="qc-btn-gold" style="width: 100%; justify-content: center; margin-top: 12px;">
-                    CONFIRMAR APROVISIONAMIENTO
-                </button>
-            </form>
-        </div>
-    </div>
-
-    <script>
-        function toggleModalInversor(show) {
-            document.getElementById('modalInversor').style.display = show ? 'flex' : 'none';
-        }
-
-        async function handleVincular(e) {
-            e.preventDefault();
-            
-            const submitBtn = e.target.querySelector('button[type="submit"]');
-            const originalText = submitBtn.innerText;
-            submitBtn.innerText = 'CONECTANDO CON CLÚSTER...';
-            submitBtn.disabled = true;
-
-            const payload = {
-                alias: e.target[0].value,
-                login: e.target[1].value,
-                password: e.target[2].value,
-                server: e.target[3].value
-            };
-
-            try {
-                const response = await fetch('/api/vincular-cuenta', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
-                const data = await response.json();
-
-                if (data.success) {
-                    alert('¡Cuenta vinculada exitosamente con MetaApi!');
-                    toggleModalInversor(false);
-                    e.target.reset();
-                } else {
-                    alert('Error de aprovisionamiento: ' + data.error);
-                }
-            } catch (error) {
-                alert('Error crítico de red al comunicarse con el servidor Quantscrow.');
-            } finally {
-                submitBtn.innerText = originalText;
-                submitBtn.disabled = false;
-            }
-        }
-    </script>
-</body>
-</html>
+app.listen(PORT, () => {
+  console.log(`[QUANTSCROW CORE] Motor Activo en puerto ${PORT}`);
+})
