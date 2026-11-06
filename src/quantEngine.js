@@ -1,16 +1,8 @@
 // src/quantEngine.js
-const config = require('./config');
+const config = require(´./config');
 
 function isKillzoneActive() {
      return true; 
-    
-    const estTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour: 'numeric', hour12: false });
-    const hour = parseInt(estTime);
-    
-    const london = config.killzones.LONDRES;
-    const ny = config.killzones.NUEVA_YORK;
-    
-    return (hour >= london.start && hour < london.end) || (hour >= ny.start && hour < ny.end);
 }
 
 function runMonteCarlo(probBase, rd) {
