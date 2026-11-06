@@ -7,7 +7,6 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.0",
-    "express": "^4.19.2",
-    "metaapi-cloud-sdk": "^26.1.0"
+    "express": "^4.19.2"
   }
 }
