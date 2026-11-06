@@ -24,7 +24,6 @@ async function conectarMetaAPI(token, accountId) {
     }
 }
 
-// 🔥 NUEVA FUNCIÓN: Obtener precio en tiempo real
 async function obtenerPrecioActual(simbolo) {
     if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
@@ -36,20 +35,18 @@ async function obtenerPrecioActual(simbolo) {
     }
 }
 
-// 🔥 NUEVA FUNCIÓN: Disparar la orden al bróker
+// 🔥 FUNCIÓN CORREGIDA
 async function ejecutarOrden(simbolo, tipo, lote, sl, tp) {
     if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
-        const options = {
-            symbol: simbolo,
-            volume: lote,
-            type: tipo, // 'ORDER_TYPE_BUY' o 'ORDER_TYPE_SELL'
-            stopLoss: sl,
-            takeProfit: tp
-        };
+        let result;
+        // Verificamos el tipo de orden para usar el método correcto del SDK
+        if (tipo === 'ORDER_TYPE_BUY') {
+            result = await connection.createMarketBuyOrder(simbolo, lote, sl, tp);
+        } else {
+            result = await connection.createMarketSellOrder(simbolo, lote, sl, tp);
+        }
         
-        // Envía la orden al mercado
-        const result = await connection.createMarketOrder(simbolo, tipo, lote, sl, tp);
         return { success: true, orderId: result.orderId };
     } catch (error) {
         console.error("Error al ejecutar orden:", error.message);
