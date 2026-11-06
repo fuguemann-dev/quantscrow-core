@@ -1,6 +1,7 @@
 // server.js
 const express = require('express');
 const path = require('path');
+const cron = require('node-cron');
 const config = require('./src/config');
 const { isKillzoneActive, evaluateSignal } = require('./src/quantEngine');
 const { checkDailyRisk } = require('./src/riskManager');
@@ -10,6 +11,9 @@ const { conectarMetaAPI, obtenerPrecioActual, ejecutarOrden } = require('./servi
 const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
+
+// Portafolio de activos a escanear
+const PORTAFOLIO = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD'];
 
 app.get('/api/status', (req, res) => {
     res.json({ server: config.server.location, status: "ONLINE", time_est: new Date().toLocaleString("en-US", { timeZone: "America/New_York" }), db: "SUPABASE_SYNC" });
@@ -23,73 +27,83 @@ app.post('/api/connect-metaapi', async (req, res) => {
     else res.status(500).json({ error: result.error });
 });
 
-// 🔥 ENDPOINT DE EJECUCIÓN MODIFICADO
-app.post('/api/evaluar', async (req, res) => {
-    try {
-        const payload = req.body;
-        const userId = process.env.MASTER_USER_ID || "00000000-0000-0000-0000-000000000000"; 
+// 🔥 EL ESCÁNER DE MERCADO
+async function escanearMercado() {
+    console.log("🔎 Iniciando escaneo de portafolio...");
+    let mejorOportunidad = null;
 
-        if (!isKillzoneActive()) return res.status(403).json({ error: "Sistema en pausa: Fuera de Killzone." });
+    for (const par of PORTAFOLIO) {
+        try {
+            const precio = await obtenerPrecioActual(par);
+            if (!precio) continue;
 
-        // 1. Obtener el precio REAL de MetaAPI
-        const precioReal = await obtenerPrecioActual(payload.par);
-        if (!precioReal) return res.status(500).json({ error: "No se pudo obtener el precio del bróker." });
+            // Simulamos un ATR del 0.15% del precio para el ejemplo
+            const atrSimulado = precio.ask * 0.0015; 
+            
+            // Evaluamos la señal
+            const evalResult = evaluateSignal({
+                precioActual: precio.ask,
+                atr: atrSimulado,
+                balance: 10000,
+                probBase: 0.50 // Asumimos 50% de probabilidad
+            });
 
-        // Aquí usamos el precio real para calcular el SL y TP
-        const precioActual = precioReal.ask; // Asumiendo compra para el ejemplo
-        const slCalculado = precioActual - (payload.atr * config.quant.atrMultiplierSL);
-        const tpCalculado = precioActual + (payload.atr * config.quant.atrMultiplierSL * 2); // R:R 2:1
-
-        // 2. Evaluar la matemática
-        const riskCheck = await checkDailyRisk(userId);
-        if (!riskCheck.canTrade) return res.status(403).json({ error: `Kill Switch: ${riskCheck.reason}` });
-
-        const evaluation = evaluateSignal({
-            precioActual,
-            slTecnico: slCalculado,
-            tpLiquidez: tpCalculado,
-            probBase: payload.probBase,
-            atr: payload.atr,
-            balance: payload.balance
-        });
-
-        if (evaluation.status === "ABORT") return res.status(400).json({ error: evaluation.reason });
-
-        let loteFinal = Math.max(0.01, evaluation.data.lote * riskCheck.factorLote);
-
-        // 3. 🔥 DISPARAR LA ORDEN AL BRÓKER
-        const ordenResult = await ejecutarOrden(payload.par, 'ORDER_TYPE_BUY', loteFinal, slCalculado, tpCalculado);
-        
-        if (!ordenResult.success) {
-            return res.status(500).json({ error: `Fallo al ejecutar orden: ${ordenResult.error}` });
-        }
-
-        // 4. Guardar en Supabase
-        await supabase.from('trades').insert([{
-            user_id: userId, par: payload.par, tipo: 'ABIERTA',
-            lote: loteFinal, precio_entrada: precioActual, sl: slCalculado, tp: tpCalculado,
-            ev_calculado: evaluation.data.ev, rd: evaluation.data.rd
-        }]);
-
-        res.json({
-            mensaje: "¡ORDEN EJECUTADA EN EL BRÓKER!",
-            detalles: {
-                precio: precioActual.toFixed(5),
-                lote: loteFinal,
-                ordenId: ordenResult.orderId,
-                probabilidad: (evaluation.data.pFinal * 100).toFixed(2) + '%',
-                ev: evaluation.data.ev.toFixed(3)
+            if (evalResult.status === "EXECUTE" && evalResult.data.ev > 0.15) {
+                // Si el EV es mayor al actual, actualizamos la mejor oportunidad
+                if (!mejorOportunidad || evalResult.data.ev > mejorOportunidad.ev) {
+                    mejorOportunidad = { par, precio: precio.ask, ...evalResult.data };
+                }
             }
-        });
-
-    } catch (error) {
-        console.error("🚨 Error en el motor:", error.message);
-        res.status(500).json({ error: "Fallo interno del servidor." });
+        } catch (e) {
+            console.error(`Error escaneando ${par}:`, e.message);
+        }
     }
+
+    // Si encontramos una oportunidad, disparamos
+    if (mejorOportunidad) {
+        console.log(`🎯 Mejor oportunidad encontrada: ${mejorOportunidad.par} (EV: ${mejorOportunidad.ev})`);
+        const ordenResult = await ejecutarOrden(mejorOportunidad.par, 'ORDER_TYPE_BUY', mejorOportunidad.lote, mejorOportunidad.slTecnico, mejorOportunidad.tpLiquidez);
+        
+        if (ordenResult.success) {
+            await supabase.from('trades').insert([{
+                user_id: process.env.MASTER_USER_ID,
+                par: mejorOportunidad.par,
+                tipo: 'ABIERTA',
+                lote: mejorOportunidad.lote,
+                precio_entrada: mejorOportunidad.precio,
+                sl: mejorOportunidad.slTecnico,
+                tp: mejorOportunidad.tpLiquidez,
+                ev_calculado: mejorOportunidad.ev
+            }]);
+            return { success: true, mensaje: `Orden ejecutada en ${mejorOportunidad.par}`, detalles: mejorOportunidad };
+        }
+    }
+    
+    return { success: false, mensaje: "No se encontraron oportunidades con +EV." };
+}
+
+// Endpoint manual (Por si quieres forzar el escaneo desde la web)
+app.post('/api/escanear', async (req, res) => {
+    if (!isKillzoneActive()) return res.status(403).json({ error: "Fuera de Killzone." });
+    const result = await escanearMercado();
+    res.json(result);
+});
+
+// 🔥 AUTOMATIZACIÓN (CRONJOB)
+// Se ejecuta cada 15 minutos entre las 3:00 AM y las 11:00 AM EST de Lunes a Viernes
+cron.schedule('*/15 3-11 * * 1-5', async () => {
+    console.log("⏰ Cronjob activado: Evaluando mercado...");
+    if (isKillzoneActive()) {
+        await escanearMercado();
+    }
+}, {
+    scheduled: true,
+    timezone: "America/New_York" // Hora de Atlanta
 });
 
 const PORT = process.env.PORT || config.server.port || 3000;
 app.listen(PORT, () => {
     console.log(`🚀 QUANTSCROW CORE operando desde ${config.server.location}`);
     console.log(`🌐 Escuchando en el puerto ${PORT}`);
+    console.log(`🤖 Cronjob de escaneo activado (Lun-Vie, 3AM-11AM EST)`);
 });
