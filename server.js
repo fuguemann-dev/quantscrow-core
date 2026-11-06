@@ -1,7 +1,15 @@
 const express = require('express');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
-const MetaApi = require('metaapi-cloud-sdk').default || require('metaapi-cloud-sdk');
+
+// Carga segura y opcional para evitar crashes si el SDK no está instalado
+let MetaApi = null;
+try {
+    const metaApiSdk = require('metaapi-cloud-sdk');
+    MetaApi = metaApiSdk.default || metaApiSdk;
+} catch (err) {
+    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI SDK desactivado temporalmente en runtime.');
+}
 
 const app = express();
 const PORT = process.env.PORT || 8080;
