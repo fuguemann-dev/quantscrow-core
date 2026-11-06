@@ -1,44 +1,32 @@
 // services/metaapiService.js
 const MetaApi = require('metaapi.cloud-sdk').default;
 
-// Variables para mantener la conexión activa en memoria
 let connection = null;
 let account = null;
 
 async function conectarMetaAPI(token, accountId) {
     try {
-        // 1. Inicializar el SDK con tu token
         const api = new MetaApi(token);
-        
-        // 2. Obtener la cuenta
         account = await api.metatraderAccountApi.getAccount(accountId);
         
-        // 3. Esperar a que la cuenta esté conectada (si no lo está, la despliega)
         if (account.state !== 'DEPLOYED') {
-            console.log("Desplegando cuenta en MetaAPI...");
             await account.deploy();
         }
-        
         await account.waitConnected();
         
-        // 4. Crear la conexión RPC para enviar órdenes
         connection = account.getRPCConnection();
         await connection.connect();
         await connection.waitSynchronized();
         
-        console.log(`✅ MetaAPI Conectado: ${accountId}`);
         return { success: true, message: "Conectado a MetaAPI" };
-        
     } catch (error) {
-        console.error("🚨 Error conectando a MetaAPI:", error.message);
         return { success: false, error: error.message };
     }
 }
 
+// 🔥 NUEVA FUNCIÓN: Obtener precio en tiempo real
 async function obtenerPrecioActual(simbolo) {
-    if (!connection) {
-        throw new Error("No hay conexión activa a MetaAPI");
-    }
+    if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
         const price = await connection.getSymbolPrice(simbolo);
         return { bid: price.bid, ask: price.ask };
@@ -48,4 +36,25 @@ async function obtenerPrecioActual(simbolo) {
     }
 }
 
-module.exports = { conectarMetaAPI, obtenerPrecioActual };
+// 🔥 NUEVA FUNCIÓN: Disparar la orden al bróker
+async function ejecutarOrden(simbolo, tipo, lote, sl, tp) {
+    if (!connection) throw new Error("No hay conexión activa a MetaAPI");
+    try {
+        const options = {
+            symbol: simbolo,
+            volume: lote,
+            type: tipo, // 'ORDER_TYPE_BUY' o 'ORDER_TYPE_SELL'
+            stopLoss: sl,
+            takeProfit: tp
+        };
+        
+        // Envía la orden al mercado
+        const result = await connection.createMarketOrder(simbolo, tipo, lote, sl, tp);
+        return { success: true, orderId: result.orderId };
+    } catch (error) {
+        console.error("Error al ejecutar orden:", error.message);
+        return { success: false, error: error.message };
+    }
+}
+
+module.exports = { conectarMetaAPI, obtenerPrecioActual, ejecutarOrden };
