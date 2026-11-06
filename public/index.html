@@ -60,32 +60,20 @@
 
         <!-- PANEL DERECHO: EJECUCIÓN CUANTITATIVA -->
         <div class="panel">
-            <h3>⚙️ EJECUCIÓN CUANTITATIVA</h3>
-            <div class="input-group">
-                <label>Par (Ej: EURUSD)</label>
-                <input type="text" id="par" value="EURUSD">
+            <h3>⚙️ ESCÁNER DE MERCADO AUTÓNOMO</h3>
+            <div class="info-box" style="margin-bottom: 20px;">
+                El motor escaneará automáticamente EURUSD, GBPUSD, USDJPY y XAUUSD durante las Killzones. <br><br>
+                <strong>Hora en Atlanta:</strong> <span id="est-time-live">--:--</span><br>
+                <strong>Estado Killzone:</strong> <span id="killzone-status" style="color: var(--text-muted);">Verificando...</span>
             </div>
-            <div class="input-group">
-                <label>Prob. Base (0 a 1)</label>
-                <input type="number" id="probBase" value="0.48" step="0.01" min="0" max="1">
-            </div>
-            <div class="input-group">
-                <label>ATR Actual</label>
-                <input type="number" id="atr" value="0.00120" step="0.00001">
-            </div>
-            <div class="input-group">
-                <label>Balance Base (USD)</label>
-                <input type="number" id="balance" value="10000">
-            </div>
-            <button onclick="evaluarTrade()">EJECUTAR ANÁLISIS CUANTITATIVO</button>
+            <button onclick="escanearMercado()">FORZAR ESCANEO AHORA</button>
+            <div id="resultado"></div>
         </div>
     </div>
-    
-    <div id="resultado"></div>
 </div>
 
 <script>
-    // Actualizar barra de estado superior
+    // 1. Actualizar barra de estado superior
     setInterval(async () => {
         try {
             const res = await fetch('/api/status');
@@ -93,12 +81,16 @@
             document.getElementById('server-loc').innerText = `CLÚSTER: ${data.server} (${data.status})`;
             document.getElementById('server-time').innerText = `HORA EST: ${data.time_est.split(', ')[1]}`;
             document.getElementById('server-db').innerText = `DB: ${data.db}`;
+            
+            // Actualizar la hora en el panel derecho
+            const timeStr = data.time_est.split(', ')[1];
+            document.getElementById('est-time-live').innerText = timeStr;
         } catch (e) {
             document.getElementById('server-loc').innerText = "CLÚSTER: OFFLINE";
         }
-    }, 5000);
+    }, 3000);
 
-    // Conexión Real a MetaAPI (Llama al backend)
+    // 2. Conexión a MetaAPI
     async function conectarBroker() {
         const token = document.getElementById('metaToken').value;
         const accountId = document.getElementById('metaAccountId').value;
@@ -110,7 +102,7 @@
             return;
         }
 
-        statusDiv.innerHTML = "⏳ Conectando con MetaAPI...";
+        statusDiv.innerHTML = "⏳ Conectando...";
         statusDiv.style.color = "var(--gold-1)";
 
         try {
@@ -119,61 +111,51 @@
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ token, accountId })
             });
-            
             const data = await res.json();
             
             if (res.ok) {
                 statusDiv.innerHTML = `✅ ${data.mensaje}`;
                 statusDiv.style.color = "var(--success)";
             } else {
-                statusDiv.innerHTML = `❌ Error: ${data.error}`;
+                statusDiv.innerHTML = `❌ ${data.error}`;
                 statusDiv.style.color = "var(--danger)";
             }
         } catch (e) {
-            statusDiv.innerHTML = "❌ Error de red con el servidor.";
+            statusDiv.innerHTML = "❌ Error de red.";
             statusDiv.style.color = "var(--danger)";
         }
     }
 
-    // Función principal de evaluación
-    async function evaluarTrade() {
-        const btn = document.querySelector('button[onclick="evaluarTrade()"]');
+    // 3. Forzar el escaneo autónomo
+    async function escanearMercado() {
+        const btn = document.querySelector('button[onclick="escanearMercado()"]');
         const resDiv = document.getElementById('resultado');
-        btn.innerText = "PROCESANDO..."; resDiv.style.display = 'none';
-
-        const payload = {
-            par: document.getElementById('par').value,
-            probBase: parseFloat(document.getElementById('probBase').value),
-            atr: parseFloat(document.getElementById('atr').value),
-            balance: parseFloat(document.getElementById('balance').value)
-        };
+        btn.innerText = "ESCANEANDO PORTAFOLIO..."; 
+        resDiv.style.display = 'none';
 
         try {
-            const response = await fetch('/api/evaluar', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(payload)
-            });
+            const response = await fetch('/api/escanear', { method: 'POST' });
             const data = await response.json();
             resDiv.style.display = 'block';
             
-            if (response.ok) {
+            if (response.ok && data.success) {
                 resDiv.className = 'exito';
                 resDiv.innerHTML = `
                     <h3 style="margin:0 0 10px 0;">✅ ${data.mensaje}</h3>
-                    <p>Lote Calculado: <strong>${data.detalles.lote}</strong></p>
-                    <p>Probabilidad: <strong>${data.detalles.probabilidad}</strong></p>
-                    <p>EV: <strong>${data.detalles.expectedValue}</strong></p>
+                    <p>Par Ejecutado: <strong>${data.detalles.par}</strong></p>
+                    <p>Lote: <strong>${data.detalles.lote}</strong></p>
+                    <p>EV: <strong>${data.detalles.ev.toFixed(3)}</strong></p>
                 `;
             } else {
                 resDiv.className = 'error';
-                resDiv.innerHTML = `🚫 ${data.error}`;
+                resDiv.innerHTML = `🚫 ${data.mensaje || data.error}`;
             }
         } catch (error) {
-            resDiv.style.display = 'block'; resDiv.className = 'error';
+            resDiv.style.display = 'block'; 
+            resDiv.className = 'error';
             resDiv.innerHTML = `🚨 Error de conexión con el motor.`;
         } finally {
-            btn.innerText = "EJECUTAR ANÁLISIS CUANTITATIVO";
+            btn.innerText = "FORZAR ESCANEO AHORA";
         }
     }
 </script>
