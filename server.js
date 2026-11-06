@@ -136,4 +136,4 @@ app.get('/health', (req, res) => {
 // Inicialización del servidor
 app.listen(PORT, () => {
     console.log(`🚀 [QUANTSCROW CORE]: Servidor ejecutándose en el puerto ${PORT}`);
-})
+});
