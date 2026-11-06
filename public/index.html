@@ -98,7 +98,7 @@
         }
     }, 5000);
 
-    // Función para probar la conexión con MetaAPI (Simulada por ahora en el backend)
+    // Conexión Real a MetaAPI (Llama al backend)
     async function conectarBroker() {
         const token = document.getElementById('metaToken').value;
         const accountId = document.getElementById('metaAccountId').value;
@@ -114,12 +114,23 @@
         statusDiv.style.color = "var(--gold-1)";
 
         try {
-            // Aquí haremos la llamada al servidor luego
-            await new Promise(r => setTimeout(r, 1500)); // Simulamos tiempo de carga
-            statusDiv.innerHTML = "✅ Cuenta Demo Conectada (Simulado)";
-            statusDiv.style.color = "var(--success)";
+            const res = await fetch('/api/connect-metaapi', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ token, accountId })
+            });
+            
+            const data = await res.json();
+            
+            if (res.ok) {
+                statusDiv.innerHTML = `✅ ${data.mensaje}`;
+                statusDiv.style.color = "var(--success)";
+            } else {
+                statusDiv.innerHTML = `❌ Error: ${data.error}`;
+                statusDiv.style.color = "var(--danger)";
+            }
         } catch (e) {
-            statusDiv.innerHTML = "❌ Error de conexión.";
+            statusDiv.innerHTML = "❌ Error de red con el servidor.";
             statusDiv.style.color = "var(--danger)";
         }
     }
