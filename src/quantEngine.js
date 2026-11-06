@@ -2,7 +2,7 @@
 const config = require('./config');
 
 function isKillzoneActive() {
-    // return true; // Descomentar para pruebas
+     return true;  Descomentar para pruebas
     
     const estTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour: 'numeric', hour12: false });
     const hour = parseInt(estTime);
