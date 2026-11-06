@@ -20,7 +20,40 @@ const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_K
 const metaApiToken = process.env.VITE_META_API_TOKEN || process.env.META_API_TOKEN;
 
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
-const api = metaApiToken ? new MetaApi(metaApiToken) : null;
+
+// Inicialización segura y a prueba de fallos de MetaAPI
+let api = null;
+try {
+    if (MetaApi && typeof MetaApi === 'function') {
+        api = metaApiToken ? new MetaApi(metaApiToken) : null;
+    } else if (MetaApi && MetaApi.default && typeof MetaApi.default === 'function') {
+        api = metaApiToken ? new MetaApi.default(metaApiToken) : null;
+    }
+} catch (e) {
+    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI inicializado en modo offline/seguro.');
+}
+
+const app = express();
+const PORT = process.env.PORT || 8080;
+
+// Configuración de Entorno & Credenciales de Producción
+const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://dcorrxkkaqulfaerapzj.supabase.co';
+const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
+const metaApiToken = process.env.VITE_META_API_TOKEN || process.env.META_API_TOKEN;
+
+let api = null;
+try {
+    if (MetaApi && typeof MetaApi === 'function') {
+        api = metaApiToken ? new MetaApi(metaApiToken) : null;
+    } else if (MetaApi && MetaApi.default && typeof MetaApi.default === 'function') {
+        api = metaApiToken ? new MetaApi.default(metaApiToken) : null;
+    }
+} catch (e) {
+    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI inicializado en modo offline/seguro.');
+}
+
+
+
 
 app.use(express.json());
 app.use(express.static(__dirname));
