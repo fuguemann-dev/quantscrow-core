@@ -2,26 +2,23 @@ const express = require('express');
 const path = require('path');
 const { createClient } = require('@supabase/supabase-js');
 
-// Carga segura y opcional para evitar crashes si el SDK no está instalado
 let MetaApi = null;
 try {
     const metaApiSdk = require('metaapi-cloud-sdk');
     MetaApi = metaApiSdk.default || metaApiSdk;
 } catch (err) {
-    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI SDK desactivado temporalmente en runtime.');
+    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI SDK desactivado.');
 }
 
 const app = express();
 const PORT = process.env.PORT || 8080;
 
-// Configuración de Entorno & Credenciales de Producción
 const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL || 'https://dcorrxkkaqulfaerapzj.supabase.co';
 const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY || process.env.SUPABASE_KEY;
 const metaApiToken = process.env.VITE_META_API_TOKEN || process.env.META_API_TOKEN;
 
 const supabase = (supabaseUrl && supabaseKey) ? createClient(supabaseUrl, supabaseKey) : null;
 
-// Inicialización segura y a prueba de fallos de MetaAPI
 let api = null;
 try {
     if (MetaApi && typeof MetaApi === 'function') {
@@ -30,15 +27,12 @@ try {
         api = metaApiToken ? new MetaApi.default(metaApiToken) : null;
     }
 } catch (e) {
-    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI inicializado en modo offline/seguro.');
+    console.warn('⚠️ [QUANTSCROW CORE]: MetaAPI en modo offline.');
 }
 
 app.use(express.json());
 app.use(express.static(__dirname));
 
-// ==========================================================
-// 1. MÓDULO DE VALIDACIÓN DE KILLZONES (HORARIO INSTITUCIONAL)
-// ==========================================================
 function checkKillzone(currentTime = new Date()) {
     const hours = currentTime.getUTCHours();
     const minutes = currentTime.getUTCMinutes();
@@ -59,9 +53,6 @@ function checkKillzone(currentTime = new Date()) {
     };
 }
 
-// ==========================================================
-// 2. MOTOR CUANTITATIVO: MONTE CARLO & GESTIÓN DE RIESGO
-// ==========================================================
 app.post('/api/quant/portfolio-simulation', (req, res) => {
     const {
         winRate = 0.55,
@@ -89,14 +80,9 @@ app.post('/api/quant/portfolio-simulation', (req, res) => {
             losses++;
         }
 
-        if (balance > peak) {
-            peak = balance;
-        }
-
+        if (balance > peak) peak = balance;
         const drawdown = (peak - balance) / peak;
-        if (drawdown > maxDrawdown) {
-            maxDrawdown = drawdown;
-        }
+        if (drawdown > maxDrawdown) maxDrawdown = drawdown;
 
         if (balance <= 0) {
             balance = 0;
@@ -110,13 +96,11 @@ app.post('/api/quant/portfolio-simulation', (req, res) => {
             iterations,
             finalBalance: Number(balance.toFixed(2)),
             netProfit: Number((balance - initialBalance).toFixed(2)),
-            maxDrawdownPercent: Number((maxDrawdown * 100).toFixed(2)),
-            winRateActual: Number(((wins / (wins + (wins + losses > 0 ? losses : 1))) * 100).toFixed(2))
+            maxDrawdownPercent: Number((maxDrawdown * 100).toFixed(2))
         }
     });
 });
 
-// Ruta principal de estatus del núcleo
 app.get('/api/status', (req, res) => {
     const killzone = checkKillzone();
     res.json({
@@ -128,12 +112,10 @@ app.get('/api/status', (req, res) => {
     });
 });
 
-// Health check para DigitalOcean App Platform
 app.get('/health', (req, res) => {
     res.status(200).send('OK');
 });
 
-// Inicialización del servidor
 app.listen(PORT, () => {
     console.log(`🚀 [QUANTSCROW CORE]: Servidor ejecutándose en el puerto ${PORT}`);
 });
