@@ -1,8 +1,17 @@
 // src/quantEngine.js
-const config = require(´./config');
+const config = require('./config');
 
 function isKillzoneActive() {
-     return true; 
+    // Descomenta la siguiente línea para forzar pruebas
+    // return true; 
+    
+    const estTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour: 'numeric', hour12: false });
+    const hour = parseInt(estTime);
+    
+    const london = config.killzones.LONDRES;
+    const ny = config.killzones.NUEVA_YORK;
+    
+    return (hour >= london.start && hour < london.end) || (hour >= ny.start && hour < ny.end);
 }
 
 function runMonteCarlo(probBase, rd) {
@@ -22,16 +31,14 @@ function calculateKelly(pFinal, rd) {
     return Math.max(config.risk.minRiskPerTrade, Math.min(risk, config.risk.maxRiskPerTrade));
 }
 
-// El cerebro ahora recibe los precios en vivo
 function evaluateSignal({ precioActual, atr, balance, probBase }) {
     if (atr <= 0) return { status: "ABORT", reason: "ATR inválido" };
 
-    // Calculamos SL y TP dinámicos basados en el ATR
     const slDist = atr * config.quant.atrMultiplierSL;
-    const slTecnico = precioActual - slDist; // Para compra
-    const tpLiquidez = precioActual + (slDist * 2.5); // Ratio 2.5:1
+    const slTecnico = precioActual - slDist;
+    const tpLiquidez = precioActual + (slDist * 2.5); 
     
-    const rd = (tpLiquidez - precioActual) / slDist; // Siempre será 2.5
+    const rd = (tpLiquidez - precioActual) / slDist;
 
     const { pFinal, ev } = runMonteCarlo(probBase, rd);
     if (ev < config.quant.minEV) {
@@ -41,7 +48,7 @@ function evaluateSignal({ precioActual, atr, balance, probBase }) {
     const riskPct = calculateKelly(pFinal, rd);
     const riskUSD = balance * riskPct;
     
-    const pipsSL = slDist * 10000; // Asumiendo 4 decimales
+    const pipsSL = slDist * 10000; 
     let lote = riskUSD / (pipsSL * 10); 
     lote = Math.max(0.01, parseFloat(lote.toFixed(2))); 
 
