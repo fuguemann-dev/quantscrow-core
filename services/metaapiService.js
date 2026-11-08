@@ -6,7 +6,7 @@ let account = null;
 
 async function conectarMetaAPI(token, accountId) {
     try {
-        const api = new MetaApi(token,{region:'london'});
+        const api = new MetaApi(token,)
         account = await api.metatraderAccountApi.getAccount(accountId);
         
         if (account.state !== 'DEPLOYED') {
