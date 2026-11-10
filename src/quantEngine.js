@@ -30,7 +30,23 @@ function calculateKelly(pFinal, rd) {
     return Math.max(config.risk.minRiskPerTrade, Math.min(risk, config.risk.maxRiskPerTrade));
 }
 
-function evaluateSignal({ precioActual, atr, balance, probBase }) {
+// 🔥 AHORA RECIBE EL BID PARA CALCULAR EL SPREAD
+function evaluateSignal({ precioActual, bid, atr, balance, probBase }) {
+    
+    // 1. FILTRO DE SPREAD (Evita trampas de liquidez y barridos)
+    if (bid) {
+        const spread = precioActual - bid;
+        const pipsSpread = spread * 10000; 
+        const MAX_SPREAD_PIPS = 1.5; // Si el spread supera 1.5 pips, abortamos
+
+        if (pipsSpread > MAX_SPREAD_PIPS) {
+            return { 
+                status: "ABORT", 
+                reason: `Spread alto (${pipsSpread.toFixed(1)} pips). Riesgo de trampa.` 
+            };
+        }
+    }
+
     if (atr <= 0) return { status: "ABORT", reason: "ATR inválido" };
 
     const slDist = atr * config.quant.atrMultiplierSL;
@@ -49,7 +65,7 @@ function evaluateSignal({ precioActual, atr, balance, probBase }) {
     const pipsSL = slDist * 10000; 
     let loteCalculado = riskUSD / (pipsSL * 10); 
     
-    // 🔥 FILTRO DE SUPERVIVENCIA
+    // FILTRO DE SUPERVIVENCIA
     if (loteCalculado < 0.01) {
         const perdidaMinima = 0.01 * (pipsSL * 10);
         const riesgoRealMinimo = perdidaMinima / balance;
@@ -57,13 +73,19 @@ function evaluateSignal({ precioActual, atr, balance, probBase }) {
         if (riesgoRealMinimo > config.risk.maxRiskPerTrade) {
             return { 
                 status: "ABORT", 
-                reason: `Riesgo con lote mínimo (${(riesgoRealMinimo*100).toFixed(2)}%) excede el máximo permitido (${(config.risk.maxRiskPerTrade*100)}%).` 
+                reason: `Riesgo con lote mínimo (${(riesgoRealMinimo*100).toFixed(2)}%) excede el máximo permitido.` 
             };
         }
         loteCalculado = 0.01;
     }
 
-    const loteFinal = parseFloat(loteCalculado.toFixed(2));
+    // 🔥 FORZAR LOTE MÍNIMO PARA CAPITAL PEQUEÑO
+    let loteFinal;
+    if (balance < 100) {
+        loteFinal = 0.01;
+    } else {
+        loteFinal = Math.max(0.01, parseFloat(loteCalculado.toFixed(2)));
+    }
 
     return {
         status: "EXECUTE",
