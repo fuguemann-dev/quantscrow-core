@@ -20,7 +20,7 @@ module.exports = {
     quant: {
         minRR: 2.0,
         minEV: 0.15,
-        atrMultiplierSL: 1.5,
+        atrMultiplierSL: 0.5,
         montecarloIterations: 10000
     }
 };
