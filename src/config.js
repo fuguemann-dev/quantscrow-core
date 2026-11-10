@@ -14,8 +14,8 @@ module.exports = {
         maxConsecutiveLosses: 2 
     },
     killzones: {
-        LONDRES: { start: 3, end: 6 },
-        NUEVA_YORK: { start: 8, end: 11 }
+        LONDRES: { start: 3, end: 12 },
+        NUEVA_YORK: { start: 8, end: 17 }
     },
     quant: {
         minRR: 2.0,
