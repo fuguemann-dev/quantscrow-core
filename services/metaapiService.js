@@ -1,4 +1,3 @@
-// services/metaapiService.js
 const MetaApi = require('metaapi.cloud-sdk').default;
 
 let connection = null;
@@ -24,7 +23,7 @@ async function conectarMetaAPI(token, accountId) {
             try {
                 if (connection) await connection.getAccountInformation();
             } catch (e) {
-                console.error("⚠️ Heartbeat falló:", e.message);
+                console.error("Heartbeat falló:", e.message);
             }
         }, 30000);
 
@@ -66,6 +65,17 @@ async function obtenerATRReal(simbolo) {
     }
 }
 
+async function obtenerBalanceReal() {
+    if (!connection) throw new Error("No hay conexión activa a MetaAPI");
+    try {
+        const accountInfo = await connection.getAccountInformation();
+        return accountInfo.balance;
+    } catch (error) {
+        console.error("Error obteniendo balance real:", error.message);
+        return null;
+    }
+}
+
 async function ejecutarOrden(simbolo, tipo, lote, sl, tp) {
     if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
@@ -82,4 +92,4 @@ async function ejecutarOrden(simbolo, tipo, lote, sl, tp) {
     }
 }
 
-module.exports = { conectarMetaAPI, obtenerPrecioActual, obtenerATRReal, ejecutarOrden };
+module.exports = { conectarMetaAPI, obtenerPrecioActual, obtenerATRReal, ejecutarOrden, obtenerBalanceReal };
