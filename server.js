@@ -113,7 +113,7 @@ app.post('/api/escanear', async (req, res) => {
     res.json(result);
 });
 
-cron.schedule('*/15 3-11 * * 1-5', async () => {
+cron.schedule('*/15 3-17 * * 1-5', async () => {
     console.log("Cronjob activado...");
     if (isKillzoneActive()) await escanearMercado();
 }, { scheduled: true, timezone: "America/New_York" });
@@ -122,5 +122,5 @@ const PORT = process.env.PORT || config.server.port || 3000;
 app.listen(PORT, () => {
     console.log(`QUANTSCROW CORE V2.0 en ${config.server.location}`);
     console.log(`Puerto ${PORT}`);
-    console.log(`Cronjob activo (Lun-Vie, 3AM-11AM EST)`);
+    console.log(`Cronjob activo (Lun-Vie, 3AM-17AM EST)`);
 });
