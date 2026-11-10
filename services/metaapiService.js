@@ -7,7 +7,7 @@ let heartbeatInterval = null;
 async function conectarMetaAPI(token, accountId) {
     try {
         const api = new MetaApi(token);
-        account = await api.metatraderAccountApi.getAccount(accountld, {isCentAccountId:true);
+        account = await api.metatraderAccountApi.getAccount(accountld);
 
         if (account.state !== 'DEPLOYED') {
             await account.deploy();
