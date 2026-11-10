@@ -47,7 +47,9 @@ async function obtenerPrecioActual(simbolo) {
 async function obtenerATRReal(simbolo) {
     if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
-        const candles = await connection.getHistoricalCandles(simbolo, '15m', new Date(), 15);
+        // 🔥 FIX: Usamos 'account' en lugar de 'connection'
+        const candles = await account.getHistoricalCandles(simbolo, '15m', new Date(), 15);
+        
         if (!candles || candles.length < 14) throw new Error("Faltan velas para ATR.");
 
         let trSum = 0;
