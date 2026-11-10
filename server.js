@@ -51,10 +51,12 @@ async function escanearMercado() {
             const atrReal = await obtenerATRReal(par);
             if (!atrReal) continue;
 
+            // 🔥 AQUÍ SE PASA EL BID PARA EL FILTRO DE SPREAD
             const evalResult = evaluateSignal({
-                precioActual: precio.bid,
+                precioActual: precio.ask,
+                bid: precio.bid, 
                 atr: atrReal,
-                balance: balanceReal,
+                balance: balanceReal, 
                 probBase: 0.50
             });
 
