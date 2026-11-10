@@ -52,7 +52,7 @@ async function escanearMercado() {
             if (!atrReal) continue;
 
             const evalResult = evaluateSignal({
-                precioActual: precio.ask,
+                precioActual: precio.bid,
                 atr: atrReal,
                 balance: balanceReal,
                 probBase: 0.50
