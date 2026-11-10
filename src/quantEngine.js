@@ -2,8 +2,7 @@
 const config = require('./config');
 
 function isKillzoneActive() {
-    // Descomenta la siguiente línea para forzar pruebas
-    // return true; 
+    // return true; // Descomenta para pruebas
     
     const estTime = new Date().toLocaleString("en-US", { timeZone: "America/New_York", hour: 'numeric', hour12: false });
     const hour = parseInt(estTime);
@@ -37,7 +36,6 @@ function evaluateSignal({ precioActual, atr, balance, probBase }) {
     const slDist = atr * config.quant.atrMultiplierSL;
     const slTecnico = precioActual - slDist;
     const tpLiquidez = precioActual + (slDist * 2.5); 
-    
     const rd = (tpLiquidez - precioActual) / slDist;
 
     const { pFinal, ev } = runMonteCarlo(probBase, rd);
@@ -47,14 +45,29 @@ function evaluateSignal({ precioActual, atr, balance, probBase }) {
 
     const riskPct = calculateKelly(pFinal, rd);
     const riskUSD = balance * riskPct;
-    
+
     const pipsSL = slDist * 10000; 
-    let lote = riskUSD / (pipsSL * 10); 
-    lote = Math.max(0.01, parseFloat(lote.toFixed(2))); 
+    let loteCalculado = riskUSD / (pipsSL * 10); 
+    
+    // 🔥 FILTRO DE SUPERVIVENCIA
+    if (loteCalculado < 0.01) {
+        const perdidaMinima = 0.01 * (pipsSL * 10);
+        const riesgoRealMinimo = perdidaMinima / balance;
+
+        if (riesgoRealMinimo > config.risk.maxRiskPerTrade) {
+            return { 
+                status: "ABORT", 
+                reason: `Riesgo con lote mínimo (${(riesgoRealMinimo*100).toFixed(2)}%) excede el máximo permitido (${(config.risk.maxRiskPerTrade*100)}%).` 
+            };
+        }
+        loteCalculado = 0.01;
+    }
+
+    const loteFinal = parseFloat(loteCalculado.toFixed(2));
 
     return {
         status: "EXECUTE",
-        data: { lote, riskUSD, pFinal, ev, rd, slTecnico, tpLiquidez }
+        data: { lote: loteFinal, riskUSD, pFinal, ev, rd, slTecnico, tpLiquidez }
     };
 }
 
