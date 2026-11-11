@@ -93,8 +93,7 @@
     // 2. Conexión a MetaAPI
     async function conectarBroker() {
         const token = document.getElementById('metaToken').value;
-       const inputAccountId = document.querySelector('input[placeholder*="12345678"]');
-        const accountId = inputAccountId ? inputAccountId.value : '';
+        const accountId = document.querySelectorAll('input')[1].value;
         const statusDiv = document.getElementById('statusBroker');
 
         if(!token || !accountId) {
