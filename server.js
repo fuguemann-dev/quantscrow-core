@@ -18,8 +18,8 @@ app.get('/api/status', (req, res) => {
 });
 
 app.post('/api/connect-metaapi', async (req, res) => {
-    const { token, accountId } = req.body;
-    if (!token || !accountId) return res.status(400).json({ error: "Faltan credenciales" });
+    const token = req.body.token || req.body.metaToken;
+const accountId = req.body.accountId || req.body.metaAccountId;
     const result = await conectarMetaAPI(token, accountId);
     if (result.success) res.json({ mensaje: "Conexión exitosa a MetaAPI" });
     else res.status(500).json({ error: result.error });
