@@ -71,7 +71,8 @@ async function obtenerBalanceReal() {
     if (!connection) throw new Error("No hay conexión activa a MetaAPI");
     try {
         const accountInfo = await connection.getAccountInformation();
-        return accountInfo.balance;
+        return accountInfo.balance / 100;
+
     } catch (error) {
         console.error("Error obteniendo balance real:", error.message);
         return null;
