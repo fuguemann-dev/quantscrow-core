@@ -11,7 +11,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-const PORTAFOLIO = ['EURUSD', 'GBPUSD', 'USDJPY', 'XAUUSD'];
+const PORTAFOLIO = ['EURUSDc', 'GBPUSDc', 'USDJPYc', 'XAUUSDc'];
 
 app.get('/api/status', (req, res) => {
     res.json({ server: config.server.location, status: "ONLINE", time_est: new Date().toLocaleString("en-US", { timeZone: "America/New_York" }), db: "SUPABASE_SYNC" });
