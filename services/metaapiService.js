@@ -1,5 +1,4 @@
 const MetaApi = require('metaapi.cloud-sdk').default;
-
 let connection = null;
 let account = null;
 let heartbeatInterval = null;
@@ -40,6 +39,17 @@ async function obtenerPrecioActual(simbolo) {
         return { bid: price.bid, ask: price.ask };
     } catch (error) {
         console.error(`Error obteniendo precio de ${simbolo}:`, error.message);
+        return null;
+    }
+}
+async function obtenerBalanceCentavos() {
+    if (!connection) throw new Error("No hay conexión activa a MetaAPI");
+    try {
+        const accountInfo = await connection.getAccountInformation();
+        const balanceReal = accountInfo.balance * 100;
+        return balanceReal;
+    } catch (error) {
+        console.error("Error obteniendo balance de cuenta:", error.message);
         return null;
     }
 }
